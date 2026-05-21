@@ -9,11 +9,11 @@
 <!-- > （例：「ものを置いたら自動でライトがつく省エネ書斎デスク」） -->
 
 **タイトル：**
-#### 日本語 :
+#### 日本語 
 
 ジョイスティックで動かす超音波スキャンとアラート装置
 
-#### English :
+#### English 
 
 Joystick‑Controlled Ultrasonic Scanning and Alert Device
 
@@ -21,11 +21,11 @@ Joystick‑Controlled Ultrasonic Scanning and Alert Device
 <!-- > ※ 30字以内で。AIに最初に投げるプロンプトの素になります。 -->
 
 **一言説明：**
-#### 日本語 :
+#### 日本語 
 
 物の距離をはかり、近くに物があればアラートを出す装置
 
-#### English :
+#### English 
 
 A device that scans distance and alerts when objects are detected
 
@@ -33,11 +33,11 @@ A device that scans distance and alerts when objects are detected
 <!-- > ※ 解決したい不便さ・あったら嬉しい理由を書いてください。 -->
 
 **動機：**
-#### 日本語 :
+#### 日本語 
 
 インターネットで、超音波センサーとサーボモーターを使ったArduinoの初心者向けプロジェクトを見て、自分でも作ってみたいと思いました。いろいろな部品（ジョイスティック、サーボ、超音波センサー、LED、ブザー）を組み合わせて動かすことを学びたいです。
 
-#### English :
+#### English 
 
 I decided to make this ultrasonic scanning device because I saw several beginner Arduino projects online that used ultrasonic sensors and servo motors. They looked interesting and fun to try, so I wanted to challenge myself and build my own version. I also want to learn how to combine multiple components such as a joystick, servo, ultrasonic sensor, LED, and buzzer into one working system.
 
@@ -120,7 +120,7 @@ When I am at home by myself and want to detect if anything is happening in front
 ### 3-4. 非機能要件（任意）
 <!-- > ※ 余裕があれば書いてください。AIはここを無視しがちです。 -->
 
-- **安全性**：<!-- センサーの値が異常なとき（0や最大値など）どうするか： -->
+- **安全性**<!-- センサーの値が異常なとき（0や最大値など）どうするか： -->
 #### 日本語 
 
 センサーが0cmや最大値などの異常な値を出したときは、「エラー」と表示し、アラートを出さない。
@@ -129,7 +129,7 @@ When I am at home by myself and want to detect if anything is happening in front
 
 If the ultrasonic sensor reads abnormal values (0 cm or max range), display “Measurement Error” and do not activate alerts.
 
-- **応答時間**：<!-- 操作してから何秒以内に反応すればOKか： -->
+- **応答時間**<!-- 操作してから何秒以内に反応すればOKか： -->
 #### 日本語 
 
 ジョイスティックを動かしてから0.2秒以内にサーボが動くこと。
