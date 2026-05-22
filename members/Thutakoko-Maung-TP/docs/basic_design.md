@@ -25,8 +25,8 @@
 | 一言説明（何ができるガジェットか） | 物の距離をはかり、近くに物があればアラートを出す装置 |
 | 使用する共通部品（グループ共通） | ジョイスティック |
 | 追加部品（個人・主なもの） | SG90 サーボモーター / HC‑SR04 超音波センサー / アクティブブザー/LED |
-| 必須機能の数（3-1の件数） | 　ジョイスティックの動きに合わせてサーボモーターを回すことができる / 超音波センサーで距離をはかることができる / 近くに物があるとLEDとブザーでアラートを出すことができる |
-| 追加機能の数（3-2の件数） | 　ジョイスティックを使わずに自動で左右にスキャンできる件 / LCDやOLEDに距離を表示できる / 距離によってブザーの音を変えることができる |
+| 必須機能の数（3-1の件数） | 　3件 |
+| 追加機能の数（3-2の件数） | 　3件 |
 
 ### English :
 | Item | Copied from requirements.md |
@@ -35,8 +35,8 @@
 | One‑sentence description (What the gadget does) | Measures the distance to objects and triggers an alert when something is close |
 | Common parts used (shared by group) | Joystick |
 | Additional parts (individual / main components) | SG90 Servo Motor / HC‑SR04 Ultrasonic Sensor / Active Buzzer / LED |
-| Number of required functions (from Section 3‑1) | Rotate the servo according to joystick movement / Measure distance with ultrasonic sensor / Trigger LED & buzzer alert when an object is near |
-| Number of additional functions (from Section 3‑2) | Automatic left‑right scanning without joystick / Display distance on LCD or OLED / Change buzzer sound depending on distance |
+| Number of required functions (from Section 3‑1) | 3 |
+| Number of additional functions (from Section 3‑2) | 3 |
 
 > [!IMPORTANT]
 > 要件定義書の「やらないこと（3-3）」に書いたことは、この設計書に登場させないこと。
@@ -54,18 +54,18 @@
 |:--|:--|
 | グループ共通部品（名称） | ジョイスティック |
 | 共通部品が担う役割 | サーボの角度を操作するため |
-| 接続するArduinoピン（予定） | GND,5V,A0,A1,D2 |
+| 接続するArduinoピン（予定） | A0 |
 | 個人の設計と共通部品が協調する箇所 | ジョイスティックを左に倒すと、サーボが左に回転し、超音波センサーがその方向をスキャンする。 |
-| グループ内で統一すべき仕様 | （例：共通部品のピン番号・閾値の単位） |
+| グループ内で統一すべき仕様 | A0,A1,D2,512 ± 50 |
 
 ### English :
 | Item | Content |
 | --- | --- |
 | Common group component (name) | Joystick |
 | Role of the common component | To control the servo angle |
-| Arduino pins to be connected (planned) | GND, 5V, A0, A1, D2 |
+| Arduino pins to be connected (planned) | A0 |
 | Where the individual design cooperates with the common component | When the joystick is pushed to the left, the servo rotates left and the ultrasonic sensor scans in that direction. |
-| Specifications that must be unified within the group | (Examples: pin numbers for the common component, units for thresholds, etc.) |
+| Specifications that must be unified within the group | A0,A1,D2,512 ± 50 |
 
 > [!TIP]
 > グループメンバー全員が同じピン番号・同じ閾値の単位を使っているか、
@@ -88,8 +88,8 @@
 ```
 【入力】                 【Arduino UNO R3】            【出力】
 タクトスイッチ ─────→┐                         ┌──→ LED（赤・緑）
-超音波センサー ─────→┤   状態管理・判定処理    ├──→ パッシブブザー
-                      └─────────────────────────┘
+超音波センサー ─────→┤   状態管理・判定処理      ├──→ パッシブブザー
+                    └─────────────────────────┘
 ```
 
 
@@ -100,11 +100,10 @@
 ```
 
 【入力】                 【Arduino UNO R3】            【出力】
-ジョイスティック(X軸)   ─→┐                         ┌──→ SG90サーボモーター
+ジョイスティック(X軸)   ─→┐                         　　　　　　　　 ┌──→ SG90サーボモーター
 超音波センサー(HC-SR04)─→┤ ジョイスティック値→角度制御／距離計測・判定 ├──→ LED
-                        └─────────────────────────┘   └──→ アクティブブザー
-
-                                                     └──→ シリアルモニター（角度・距離）
+                        └───────────────────────────────────────┘ └──→ アクティブブザー
+                                                                  └──→ シリアルモニター（角度・距離）
                                                      
 ```
 
@@ -114,11 +113,10 @@
 
 [Input]                     [Arduino UNO R3]                       [Output]
 Joystick (X‑axis)     ─→┐                                      ┌──→ SG90 Servo Motor
-Ultrasonic Sensor     ─→┤  Joystick value → angle control       │
-(HC‑SR04)                │  Distance measurement → judgment      ├──→ LED
+Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
+(HC‑SR04)               │  Distance measurement → judgment     ├──→ LED
                         └──────────────────────────────────────┘
                                                                └──→ Active Buzzer
-
                                                                └──→ Serial Monitor (angle / distance)
 
 ```
@@ -489,14 +487,11 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control       │
 
 | No | 指摘内容 | 指摘者 | 対応 |
 |:---|:---|:---|:---|
-| 1 |  |  |  |
-| 2 |  |  |  |
-| 3 |  |  |  |
+| 1 | この二日間ではできないかなと思って辞めた機能ありますか。 | マウン | 今回は見送り、後日追加機能として検討する  |
 
 ### 8-2. レビューを受けて変更した点
 
--
--
+- ありません。
 
 ---
 
