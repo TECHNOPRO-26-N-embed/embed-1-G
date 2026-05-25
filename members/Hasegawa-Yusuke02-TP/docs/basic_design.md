@@ -181,7 +181,6 @@
 | F01 | 必須機能①（requirements転記） | `editDigits()` | 必須機能①の処理を行う | — | — | loop()内 |
 | F02 | 必須機能②（requirements転記） | `applyDigitsToLed()` | 必須機能②の処理を行う | — | — | loop()内 |
 | A01 | 追加機能①（余裕があれば） | `runLedPattern()` | 追加機能①の処理を行う | — | — | loop()内 |
-|  |  |  |  |  |  |  |
 | — | ジョイスティック読出 | `readJoystick()` | ジョイスティックのX/Y/SW値を取得し変数に格納 | なし | なし | loop()内 |
 | — | 桁選択処理 | `selectDigit()` | ジョイスティック横操作で選択中の桁を変更 | なし | なし | loop()内 |
 | — | 値変更処理 | `changeDigitValue()` | ジョイスティック縦操作で選択中の桁の値を変更 | なし | なし | loop()内 |

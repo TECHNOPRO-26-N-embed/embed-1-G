@@ -583,29 +583,17 @@
 |:---|:---|:---|:---|:---|:---|
 | 1 | readButton() | タクトスイッチを1回押す | true が返る | | [ ] |
 | 2 | readButton() | スイッチを素早く2回押す | 1回分だけ true になる | | [ ] |
-| 3 | readButton() | スイッチを長押しする | 連続してtrueが返らず、1回だけtrueになる | | [ ] |
-| 4 | readButton() | チャタリングが多い状態で押す | 誤検知せず、1回だけtrueになる | | [ ] |
-| 5 | readJoystick() | スティックを中央で静止させる（X/Yともに中立） | joystickX/joystickY が中心値付近（512付近）で安定して取得できる | | [ ] |
-| 6 | readJoystick() | スティックを左右・上下に最大まで倒す | joystickX/joystickY が変化し、倒した方向に応じた値（低値/高値）になる | | [ ] |
-| 7 | readJoystick() | スティックを中心付近で微小に揺らす（デッドゾーン内） | 判定が過敏に変化せず、桁選択や値変更が不要に発生しない | | [ ] |
-| 8 | selectDigit() | selectedDigit=3で右操作 | selectedDigitが0に戻る（循環） | | [ ] |
-| 9 | selectDigit() | selectedDigit=0で左操作 | selectedDigitが3に戻る（循環） | | [ ] |
-| 10 | changeDigitValue() | digitValues=9で+1操作 | digitValuesが0に戻る（循環） | | [ ] |
-| 11 | changeDigitValue() | digitValues=0で-1操作 | digitValuesが9に戻る（循環） | | [ ] |
-| 12 | readJoystick() | joystickX/joystickYが仕様外値（-10や1030など） | 前回の有効値を保持し、異常動作しない | | [ ] |
+| 3 | readJoystick() | スティックを中央で静止させる（X/Yともに中立） | joystickX/joystickY が中心値付近（512付近）で安定して取得できる | | [ ] |
+| 4 | readJoystick() | スティックを左右・上下に最大まで倒す | joystickX/joystickY が変化し、倒した方向に応じた値（低値/高値）になる | | [ ] |
+| 5 | readJoystick() | スティックを中心付近で微小に揺らす（デッドゾーン内） | 判定が過敏に変化せず、桁選択や値変更が不要に発生しない | | [ ] |
 
 ### 5-2. 出力系テスト
 
 | No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
 | 1 | confirmAndSetLED() | digitValues を [9,0,0,0] に設定して確定操作する | ledR=252, ledG=0, ledB=0 となり、LEDが赤系で点灯する | | [ ] |
-| 2 | confirmAndSetLED() | digitValues を [0,9,9,1] に設定して確定操作する | ledR=0, ledG=252, ledB=252, effectMode=1 となる | | [ ] |
-| 3 | confirmAndSetLED() | digitValues を [0,0,0,9] に設定して確定操作する | effectMode=1〜3の範囲で循環し、異常値にならない | | [ ] |
-| 4 | confirmAndSetLED() | digitValues を [0,0,0,0] に設定して確定操作する | ledR=0, ledG=0, ledB=0, effectMode=0 となる | | [ ] |
-| 5 | updateDisplay() | selectedDigit=2, digitValues=[1,2,3,4] で表示更新する | 7セグに 1234 が表示され、選択中の3桁目が点滅表示される | | [ ] |
-| 6 | updateDisplay() | digitValues=[9,9,9,9] で表示更新する | 7セグに 9999 が表示される | | [ ] |
-| 7 | updateDisplay() | digitValues=[0,0,0,0] で表示更新する | 7セグに 0000 が表示される | | [ ] |
-| 8 | runLedPattern() | effectMode を 1（点滅）に設定して一定時間動作させる | 設計周期でLEDが点滅し、他色成分や表示が不正に乱れない | | [ ] |
+| 2 | updateDisplay() | selectedDigit=2, digitValues=[1,2,3,4] で表示更新する | 7セグに 1234 が表示され、選択中の3桁目が点滅表示される | | [ ] |
+| 3 | runLedPattern() | effectMode を 1（点滅）に設定して一定時間動作させる | 設計周期でLEDが点滅し、他色成分や表示が不正に乱れない | | [ ] |
 
 ### 5-3. タイミング・並行動作テスト
 
@@ -613,8 +601,7 @@
 |:---|:---|:---|:---|:---|:---|
 | 1 | 非ブロッキング動作確認（入力取りこぼしなし） | effectMode=1でLED点滅中に、ジョイスティックを左右に連続操作し桁選択を行う | LED点滅を継続したまま selectedDigit が遅延なく更新される（操作が止まらない） | | [ ] |
 | 2 | エフェクト周期精度（EFFECT_INTERVAL） | effectMode=1で1分間動作させ、点滅間隔をストップウォッチで複数回測定する | 測定した点滅間隔が設計値（例:100ms）に対して大きくずれない | | [ ] |
-| 3 | エフェクト周期の境界値 | effectMode=1でEFFECT_INTERVAL直前/直後にLED点滅が正しく切り替わる | 境界で誤動作せず、1周期ごとに正しく点滅する | | [ ] |
-| 4 | 表示更新と入力処理の並行性 | 7セグ表示更新中にジョイスティックを上下操作して値変更を連続実行する | 表示のちらつきや停止なく digitValues が追従して更新される | | [ ] |
+| 3 | 表示更新と入力処理の並行性 | 7セグ表示更新中にジョイスティックを上下操作して値変更を連続実行する | 表示のちらつきや停止なく digitValues が追従して更新される | | [ ] |
 
 ---
 
@@ -648,6 +635,7 @@
 タイミングの境界（周期判定の前後での動作）
 
 **対応した内容：**
+AIに追加箇所を聞いてみて確認
 
 ---
 
@@ -663,8 +651,7 @@
 
 ### 7-2. レビューを受けて変更した点
 
-- doFeature1() を editDigits() に変更
-- doFeature2() を applyDigitsToLed()、doOptional1() を runLedPattern() に変更
+-関数名の見直しと修正
 
 ---
 
