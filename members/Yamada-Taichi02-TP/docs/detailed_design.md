@@ -20,7 +20,7 @@
 | 項目 | basic_design.md から転記 |
 |:--|:--|
 | 作品タイトル | 力を使わず楽に移動できるカート |
-| 状態の種類（1-2 状態遷移から） | 待機中, 入力分岐, 前転, 後転, 停止|
+| 状態の種類（1-2 状態遷移から） | 待機中, 入力分岐, エラー|
 | 実装する関数の数（2-2 関数一覧から） | 9　個 |
 | グローバル変数の合計バイト数（2-1 SRAM確認から） | 6　B |
 
@@ -41,13 +41,11 @@ PIN_LED_GREEN  = 10;    // 緑LED
 
 【状態管理】（basic_design.md 1-2 の状態名から転記）
 enum State {
-  STATE_IDLE,        // 待機中・停止（統合）
-  STATE_INPUT,       // 入力分岐
-  STATE_FORWARD,     // 前転
-  STATE_BACKWARD,    // 後転
-  STATE_ERROR        // エラー
+  IDLE,        // 待機中・停止
+  MOVE,        // 回転中
+  ERROR        // エラー
 };
-State currentState = STATE_IDLE;
+State currentState = IDLE;
 
 【タイマー（millis()用）】（basic_design.md 2-3 から転記）
 lastMillis_Joystick : unsigned long = 0; // ジョイスティック監視用タイマー
@@ -77,23 +75,6 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 ```
 【処理の流れ】
 1. ピンモードを設定する
-   - PIN_BUTTON  → INPUT_PULLUP
-   - PIN_LED_*   → OUTPUT
-   - PIN_BUZZER  → OUTPUT
-
-2. ライブラリの初期化（使うものだけ）
-   - 例: lcd.begin(16, 2)
-   - 例: servo.attach(PIN_SERVO)
-
-3. Serial.begin(9600)（デバッグ用）
-
-4. 起動確認（任意）: 緑LEDを1秒点灯して消灯
-```
-
-**↓ 自分の setup() を設計してください**
-```
-【処理の流れ】
-1. ピンモードを設定する
    - PIN_BUTTON     → INPUT_PULLUP; // ボタン入力
    - PIN_LED_GREEN  → OUTPUT;       // 緑LED出力
    - PIN_MOTOR_1    →OUTPUT;        // モーター制御ピン1
@@ -112,46 +93,22 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 【処理の流れ】
 
 ＜毎ループ実行すること＞
-  - 入力を読む（readButton(), readSensor() などを呼ぶ）
   - 現在時刻を取得: now = millis()
-
-＜currentState が 0（待機中）のとき＞
-  - センサー値を監視する
-  - 検知条件を満たしたら → currentState = 1
-
-＜currentState が 1（動作中）のとき＞
-  - メイン処理を行う
-  - 終了条件を満たしたら → currentState = 2
-
-＜currentState が 2（完了）のとき＞
-  - 完了表示をする
-  - リセットボタンが押されたら → currentState = 0
-
-＜currentState が 3（エラー）のとき＞
-  - エラー表示をする / リセットを待つ
-```
-
-**↓ 自分の loop() を設計してください**
-```
-【処理の流れ】
-
-＜毎ループ実行すること＞
-  - 現在時刻を取得: now = millis()
-  - now - lastMillis_Joystick >= 50 のとき    readJoystick() を実行する
+  - now - lastMillis_Joystick >= 50 のとき readJoystick() を実行する
   - now - lastMillis_Button >= 50 のとき readButton() を実行し、押下確定時は setSpeedMode() を実行する
 
-＜currentState が 0（待機中）のとき＞
+＜currentState が Idle（待機中）のとき＞
   - joystickInput を監視する（デッドゾーン: 512 ± 80）
-  - joystickInput がデッドゾーン外なら → currentState = 1
+  - joystickInput がデッドゾーン外なら → currentState = Move
 
 
-＜currentState が 1（動作中）のとき＞
+＜currentState が Move（動作中）のとき＞
   - updateOutput() を実行する
 
 
-＜currentState が 3（エラー）のとき＞
+＜currentState が ERROR（エラー）のとき＞
   - モーターを停止し、エラー表示をする
-  - リセット条件を満たしたら → currentState = 0
+  - リセット条件を満たしたら → currentState = Idle
 
 ```
 
@@ -177,7 +134,7 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 3. joystickInput を戻り値として返す
 
 【エラー・異常ケース】
-- 異常な値が来た場合: 前回の有効値を維持し、必要なら STATE_ERROR に遷移する
+- 異常な値が来た場合: 前回の有効値を維持し、必要なら ERROR に遷移する
 ```
 
 ---
@@ -197,7 +154,7 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 3. 432 <= joystickInput <= 592 なら、状態を待機にする
 
 【エラー・異常ケース】
-- joystickInput が 0〜1023 の範囲外の場合: モーター停止して STATE_ERROR に遷移する
+- joystickInput が 0〜1023 の範囲外の場合: モーター停止して ERROR に遷移する
 ```
 
 ---
@@ -217,7 +174,7 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 3. 前転状態の出力を維持する
 
 【エラー・異常ケース】
-- 出力更新に失敗した場合: モーター停止して STATE_ERROR に遷移する
+- 出力更新に失敗した場合: モーター停止して ERROR に遷移する
 ```
 
 ---
@@ -237,7 +194,7 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 3. 後転状態の出力を維持する
 
 【エラー・異常ケース】
-- 出力更新に失敗した場合: モーター停止して STATE_ERROR に遷移する
+- 出力更新に失敗した場合: モーター停止して ERROR に遷移する
 ```
 
 ---
@@ -475,13 +432,12 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 
 | No | 指摘内容 | 指摘者 | 対応 |
 |:---|:---|:---|:---|
-| 1 |  |  |  |
+| 1 | loop()内でcurrentStateが3のときの判定を行っているが、Stateには2までしかない | 湯田 | 対応済み |
 | 2 |  |  |  |
 | 3 |  |  |  |
 
 ### 7-2. レビューを受けて変更した点
-
--
+- Stateの中身変更で影響があった箇所を修正
 -
 
 ---
