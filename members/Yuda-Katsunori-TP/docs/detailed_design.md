@@ -1,294 +1,407 @@
-# 詳細設計書 — 組込み開発実習
+# 詳細設計書 - 組込み開発実習
 
-<!-- 作成者: あなたの名前 / 日付: YYYY-MM-DD / グループ: 〇-〇 -->
+<!-- 作成者: Yuda-Katsunori-TP / 日付: 2026-05-22 / グループ: embed-1-G -->
 
-> **このドキュメントの目的**
-> 基本設計書（basic_design.md）で「**どのような構造で作るか**」を決めました。
-> この詳細設計書では「**各処理を具体的にどう実装するか**」を決めます。
-> 書き終わったとき、**コードの骨格がほぼ完成している**状態を目指してください。
-
-> [!NOTE]
-> **V字モデルにおける位置づけ**
-> 詳細設計書 ←→ **単体テスト**（関数・部品ごとのテスト）が対応します。
-> 「この関数が正しく動くか」の確認は Section 5 の単体テスト仕様書で計画します。
-> ※ 必須機能全体が動くかの「結合テスト」は基本設計書（Section 6）に記載します。
+> このドキュメントは、src/snake.ino の実装内容に合わせて更新した詳細設計です。
 
 ---
 
 ## 0. 基本設計書との接続確認
 
-| 項目 | basic_design.md から転記 |
+| 項目 | 内容 |
 |:--|:--|
-| 作品タイトル | |
-| 状態の種類（1-2 状態遷移から） | |
-| 実装する関数の数（2-2 関数一覧から） | 　個 |
-| グローバル変数の合計バイト数（2-1 SRAM確認から） | 　B |
+| 作品タイトル | レトロ風・ドット絵ミニゲーム機（スネークゲーム） |
+| 状態の種類 | 待機中、ゲーム中、ゲームオーバー |
+| 実装関数数 | 12個（setup, loop, readJoystick, moveSnake, spawnFood, checkCollision, addScore, gameOver, updateLCD, playBGM, levelUp, drawField） |
+| グローバル変数の合計バイト数 | 約120B（主要変数のみ、ライブラリ内部領域は除く） |
 
 ---
 
 ## 1. グローバル変数・定数の設計
 
-> ※ 基本設計書（2-1 データ設計）をもとに、**型と初期値まで**決めます。
-> ここで設計した変数は、この後の関数設計でそのまま使います。
-
 ```
-【ピン定義】（basic_design.md 3-1 から転記）
-  PIN_BUTTON    = 2    // タクトスイッチ（INPUT_PULLUP）
-  PIN_LED_RED   = 9    // 赤LED
-  PIN_LED_GREEN = 10   // 緑LED
-  PIN_BUZZER    = 11   // パッシブブザー
+【ピン定義】
+PIN_JOY_X = A0
+PIN_JOY_Y = A1
+PIN_JOY_BTN = 2
+PIN_LED_CS = 10
+PIN_LED_CLK = 11
+PIN_LED_DIN = 12
+PIN_BUZZER_PASSIVE = 5
+PIN_BUZZER_ACTIVE = 6
+PIN_LCD_SDA = A4
+PIN_LCD_SCL = A5
 
-【状態管理】（basic_design.md 1-2 の状態名から転記）
-  currentState  : int = 0   // 0:待機 1:動作中 2:完了 3:エラー
+【固定値】
+DEBOUNCE_DELAY : const int = 50
+FIELD_SIZE : const int = 8
+MAX_SNAKE : const int = 16
+MIN_SPEED_LEVEL : const int = 1
+MAX_SPEED_LEVEL : const int = 5
+SPEED_ADJUST_DELAY : const unsigned long = 180
 
-【タイマー（millis()用）】（basic_design.md 2-3 から転記）
-  lastMillis_LED    : unsigned long = 0
-  lastMillis_Sensor : unsigned long = 0
+【状態管理】
+currentState : int = 0   // 0:待機 1:ゲーム中 2:ゲームオーバー
 
-【センサー・入力値】（basic_design.md 2-1 から転記）
-  sensorValue   : int  = 0
-  buttonState   : bool = false
+【タイマー】
+lastMoveMillis : unsigned long = 0
+lastDebounceTime : unsigned long = 0
+lastSpeedAdjustMillis : unsigned long = 0
+lastBgmMillis : unsigned long = 0
 
-【その他のフラグ・カウンター】
-  （自分のものを追加）
+【入力値】
+joyX : int = 0
+joyY : int = 0
+joyBtn : bool = false
+prevJoyBtn : bool = false
+
+【ゲームデータ】
+snake[MAX_SNAKE][2] : int
+snakeLength : int = 3
+foodPos[2] : int
+dirX : int = 1
+dirY : int = 0
+score : int = 0
+highScore : int = 0
+moveInterval : int = 300
+speedLevel : int = 3
+
+【音関連】
+buzzerFlag : bool = false
+bgmIndex : int = 0
+bgmTempo : int = 180
+melody[] : const int = {262, 294, 330, 349, 392, 440, 494, 523}
+noteDurations[] : const int = {4, 4, 4, 4, 4, 4, 4, 4}
+
+【表示用】
+lcdText[16] : char
 ```
 
 ---
 
 ## 2. 各関数の詳細設計
 
-> ※ 基本設計書（2-2 関数一覧）で定義した各関数の「中身」を設計します。
-> **疑似コード**（日本語＋処理の流れ）で書いてください。実際のC++コードは書かなくてOKです。
-
----
-
-### `setup()` — 初期化処理
+### setup() - 初期化処理
 
 ```
 【処理の流れ】
-1. ピンモードを設定する
-   - PIN_BUTTON  → INPUT_PULLUP
-   - PIN_LED_*   → OUTPUT
-   - PIN_BUZZER  → OUTPUT
+1. 各ピンモード設定
+   - ジョイスティックX/Y: INPUT
+   - ジョイスティック押し込み: INPUT_PULLUP
+   - ブザー2系統: OUTPUT
 
-2. ライブラリの初期化（使うものだけ）
-   - 例: lcd.begin(16, 2)
-   - 例: servo.attach(PIN_SERVO)
+2. LEDマトリクス初期化
+   - shutdown(false), intensity設定, clearDisplay
 
-3. Serial.begin(9600)（デバッグ用）
+3. LCD初期化
+   - lcd.init(), lcd.backlight()
 
-4. 起動確認（任意）: 緑LEDを1秒点灯して消灯
+4. Serial.begin(9600)
+
+5. 起動演出
+   - LED先頭行を点灯
+   - パッシブブザー短音
+   - 500ms待機後に表示クリア
+
+6. 初期エサ配置
+   - spawnFood() を呼ぶ
 ```
 
-**↓ 自分の setup() を設計してください**
-```
-【処理の流れ】
-1.
-2.
-3.
-```
-
----
-
-### `loop()` — メインループ
-
-> ※ loop() は「状態ごとに何をするか」だけ書く。細かい処理は各関数に任せる。
+### loop() - メインループ
 
 ```
 【処理の流れ】
+1. 毎ループで readJoystick() を実行
+2. now = millis() を取得
+3. joyBtnの立ち上がり検出
+   - pressed = (!prevJoyBtn && joyBtn)
 
-＜毎ループ実行すること＞
-  - 入力を読む（readButton(), readSensor() などを呼ぶ）
-  - 現在時刻を取得: now = millis()
+4. 状態分岐
+  (A) currentState == 0（待機）
+      - LEDにタイトル行を表示
+      - joyY上下で speedLevel(1-5) を調整
+      - LCDに "Push to Start" と速度表示
+      - pressed でゲーム開始初期化
+        ・snakeLength=3, score=0
+        ・moveInterval = 420 - speedLevel*60
+        ・spawnFood(), スネーク初期座標配置
+        ・進行方向を右(1,0)へ初期化
+        ・LEDをクリアして drawField()
 
-＜currentState が 0（待機中）のとき＞
-  - センサー値を監視する
-  - 検知条件を満たしたら → currentState = 1
+  (B) currentState == 1（ゲーム中）
+      - playBGM() を実行
+      - moveInterval周期で moveSnake()
+      - checkCollision() の結果で分岐
+        ・1（エサ）: addScore(), spawnFood(), 効果音
+        ・2（壁/自身）: gameOver()
+      - drawField(), updateLCD()
 
-＜currentState が 1（動作中）のとき＞
-  - メイン処理を行う
-  - 終了条件を満たしたら → currentState = 2
+  (C) currentState == 2（ゲームオーバー）
+      - LEDにゲームオーバーパターン表示
+      - アクティブブザーを鳴動
+      - pressedで待機状態へ戻す
 
-＜currentState が 2（完了）のとき＞
-  - 完了表示をする
-  - リセットボタンが押されたら → currentState = 0
-
-＜currentState が 3（エラー）のとき＞
-  - エラー表示をする / リセットを待つ
+5. ループ末尾で prevJoyBtn = joyBtn
 ```
 
-**↓ 自分の loop() を設計してください**
-```
-【処理の流れ】
+### readJoystick() - ジョイスティック入力取得と方向更新
 
-＜毎ループ実行すること＞
-
-
-＜currentState が 　　 のとき＞
-
-
-＜currentState が 　　 のとき＞
-
-
-＜currentState が 　　 のとき＞
-
-```
-
----
-
-### （関数ごとに以下のブロックをコピーして追加してください）
-
-> ※ 基本設計書 2-2 の関数一覧に記載した関数を1つずつ設計します。
-
----
-
-### `関数名()` — （役割を1行で書く）
-
-**basic_design.md 2-2 との対応：** （基本設計書の関数一覧の説明を転記）
-
-**引数：** `引数名`（型）: 何の値か
-
-**戻り値：** 型（なしの場合は void）
+**引数:** なし
+**戻り値:** なし
 
 ```
 【処理の流れ】
-1.
-2.
-3.
+1. A0/A1のアナログ値を joyX/joyY に取得
+2. 押し込みボタンを読み取り（LOW=押下を反転）
+3. デバウンス判定
+   - btn状態が変化し、かつ前回確定から50ms超なら joyBtn更新
+4. ゲーム中のみ方向更新
+   - joyX < 400 かつ逆方向でない -> 左
+   - joyX > 600 かつ逆方向でない -> 右
+   - joyY > 600 かつ逆方向でない -> 上
+   - joyY < 400 かつ逆方向でない -> 下
+```
 
-【エラー・異常ケース】
-- 異常な値が来た場合:
+### moveSnake() - スネーク座標更新
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. 頭座標 + (dirX, dirY) で新しい頭座標を計算
+2. 末尾から先頭へ向かって座標配列を1つ後ろへシフト
+3. 先頭に新しい頭座標を代入
+
+【補足】
+- 伸長処理は addScore() 内で snakeLength を増やす
+```
+
+### spawnFood() - エサ座標生成
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. valid=falseで開始
+2. フィールド内ランダム座標を生成
+3. スネーク全身と重複チェック
+4. 重複なしなら foodPos に確定
+5. 重複ありなら再抽選
+```
+
+### checkCollision() - 衝突判定
+
+**引数:** なし
+**戻り値:** int（0:なし 1:エサ 2:壁/自身）
+
+```
+【処理の流れ】
+1. 頭座標がフィールド外なら 2 を返す
+2. 頭座標が胴体と重なれば 2 を返す
+3. 頭座標が foodPos と一致すれば 1 を返す
+4. どれにも該当しなければ 0 を返す
+```
+
+### addScore() - 得点・成長・レベルアップ
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. scoreを1加算
+2. score > highScore なら highScore更新
+3. scoreが5の倍数なら levelUp() を呼ぶ
+4. snakeLength < MAX_SNAKE なら1伸ばす
+```
+
+### gameOver() - ゲーム終了処理
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. currentState を 2 に設定
+2. アクティブブザーでゲームオーバー音を鳴らす
+```
+
+### updateLCD() - スコア表示更新
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. lcd.clear()
+2. 1行目に "Score:" + score を表示
+3. 2行目に "Hi:" + highScore を表示
+```
+
+### playBGM() - BGM再生制御
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. 現在ノート長を算出
+   - noteDuration = 60000 / bgmTempo / noteDurations[bgmIndex]
+2. 前回再生から noteDuration 経過したら次ノート再生
+3. bgmIndex を循環更新
+```
+
+### levelUp() - 移動間隔短縮
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. moveInterval > 100 のときのみ 40ms短縮
+2. 下限100msを維持
+```
+
+### drawField() - LEDマトリクス描画
+
+**引数:** なし
+**戻り値:** なし
+
+```
+【処理の流れ】
+1. LED表示をクリア
+2. スネーク全身を setLed() で点灯
+3. エサ座標を setLed() で点灯
+4. 範囲外座標は描画しない
 ```
 
 ---
 
 ## 3. 重要ロジックの詳細設計
 
-### 3-1. チャタリング防止（デバウンス処理）
-
-> ※ ボタンを使う場合は必ず設計してください。
+### 3-1. チャタリング防止（デバウンス）
 
 ```
 【考え方】
-  ボタンが押されたとき、50ms 以内の連続入力は「同じ1回の押下」として無視する。
+ボタン状態が変化しても即反映せず、50ms以上安定した変化のみ確定する。
 
 【処理の流れ】
-  1. ボタンのデジタル値を読む（digitalRead）
-  2. 前回確定した時刻（lastDebounceTime）からの経過時間を計算する
-  3. 経過時間 < DEBOUNCE_DELAY（例: 50ms）→ 無視する
-  4. 経過時間 ≥ DEBOUNCE_DELAY → ボタンの状態として確定する
-  5. lastDebounceTime を更新する
-
-【必要な変数（Section 1 に追加済みか確認）】
-  lastDebounceTime : unsigned long   // 前回確定した時刻
-  DEBOUNCE_DELAY   : const int = 50  // チャタリング判定時間（ms）
+1. btn = !digitalRead(PIN_JOY_BTN)
+2. btn != joyBtn を確認
+3. millis() - lastDebounceTime > 50 を確認
+4. 条件成立時のみ joyBtn と lastDebounceTime を更新
 ```
 
----
-
-### 3-2. millis() を使ったタイマー管理
+### 3-2. millis()ベースのタイマー
 
 ```
-【考え方】
-  「前回実行した時刻」を記録しておき、「今の時刻 − 前回時刻 ≥ 周期」なら実行する。
+【利用箇所】
+1. スネーク移動周期
+   - now - lastMoveMillis >= moveInterval
 
-【処理の流れ（例: LED点滅）】
-  1. now = millis()
-  2. now - lastMillis_LED >= LED_INTERVAL かどうか確認
-  3. 条件を満たした場合: LEDのON/OFFを切り替え、lastMillis_LED = now
-  4. 条件を満たさない場合: 何もしない（次のループで再チェック）
+2. 待機中の速度調整周期
+   - now - lastSpeedAdjustMillis > SPEED_ADJUST_DELAY
 
-【自分のシステムで millis() を使う処理】
-  （basic_design.md 2-3 のタイミング設計から転記して具体化する）
+3. BGMの次ノート再生
+   - now - lastBgmMillis > noteDuration
+
+4. 押し込みボタンのデバウンス
+   - millis() - lastDebounceTime > DEBOUNCE_DELAY
 ```
 
----
-
-### 3-3. その他の重要ロジック（任意）
-
-> **【任意】** 複雑なロジックがある場合のみ記入してください。
-> 例：「距離に応じたLED点灯パターン」「ゲームの衝突判定」「温度の閾値判定」
+### 3-3. 方向反転禁止ロジック
 
 ```
-【処理の流れ】
-1.
-2.
-3.
+【目的】
+直前フレームでの逆走入力（右移動中に左入力など）を無効化し、自滅頻度を抑える。
 
-【入力値と出力値の関係】
-
+【判定】
+- 左入力時: dirX != 1 のときのみ反映
+- 右入力時: dirX != -1 のときのみ反映
+- 上入力時: dirY != 1 のときのみ反映
+- 下入力時: dirY != -1 のときのみ反映
 ```
 
 ---
 
 ## 4. デバッグ出力計画（任意）
 
-> **【任意】** 関数設計（Section 2）と並行して記入すると効果的です。
-> 「動かない」ときに何を確認すればいいかを事前に計画しておきます。
-> 実装後は不要な Serial.println() を削除すること。
-
-| No | 確認したい内容 | 挿入する関数 | Serial.println の内容例 |
+| No | 確認したい内容 | 挿入する関数 | Serial出力例 |
 |:---|:---|:---|:---|
-| 1 | センサー値が正しく取れているか | `readSensor()` | `Serial.println(sensorValue);` |
-| 2 | 状態遷移が正しく起きているか | `loop()` | `Serial.println(currentState);` |
-| 3 | チャタリング処理が効いているか | `readButton()` | `Serial.println("btn confirmed");` |
-| 4 |  |  |  |
+| 1 | 入力しきい値が適切か | readJoystick() | joyX, joyY, joyBtn |
+| 2 | 方向更新が正しいか | readJoystick() | dirX, dirY |
+| 3 | 状態遷移が正しいか | loop() | currentState |
+| 4 | 移動周期が正しいか | loop() | now-lastMoveMillis, moveInterval |
+| 5 | エサ重複回避が機能するか | spawnFood() | foodPos |
+| 6 | 衝突判定が正しいか | checkCollision() | collision result |
+| 7 | スコアと速度が連動するか | addScore(), levelUp() | score, highScore, moveInterval |
+| 8 | 描画座標が範囲内か | drawField() | snake[0], foodPos |
 
 ---
 
-## 5. 単体テスト仕様書（V字モデル：詳細設計 ↔ 単体テスト）
-
-> ※ 各関数・部品が「単体で正しく動くか」を確認するテスト項目を設計します。
-> 「実際の結果」欄は実装後に記入します。
+## 5. 単体テスト仕様書（V字モデル: 詳細設計 ↔ 単体テスト）
 
 ### 5-1. 入力系テスト
 
-| No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
+| No | テスト対象 | 入力・操作 | 期待結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | readButton() | タクトスイッチを1回押す | true が返る | | [ ] |
-| 2 | readButton() | スイッチを素早く2回押す | 1回分だけ true になる | | [ ] |
-| 3 | readSensor() | センサーを正常範囲で使う | 仕様範囲内の値が返る | | [ ] |
-| 4 | readSensor() | センサーを遮蔽・範囲外に向ける | 誤動作しない | | [ ] |
-| 5 | （自分の関数を追加） | | | | [ ] |
+| 1 | readJoystick() | 左右上下に倒す | dirX/dirYが対応方向に更新 | | [ ] |
+| 2 | readJoystick() | 右移動中に左へ倒す | 逆方向入力は無視される | | [ ] |
+| 3 | readJoystick() | 押し込みを高速連打 | 50ms以内の変化は無視される | | [ ] |
+| 4 | loop()待機中 | joyYを上下に操作 | speedLevelが1-5範囲で増減 | | [ ] |
 
-### 5-2. 出力系テスト
+### 5-2. ゲームロジックテスト
 
-| No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
+| No | テスト対象 | 入力・操作 | 期待結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | updateOutput(0) | state=0（待機中）を渡す | 緑LEDが点滅する | | [ ] |
-| 2 | updateOutput(1) | state=1（動作中）を渡す | 赤LEDが点灯、ブザーが鳴る | | [ ] |
-| 3 | （自分の状態・関数を追加） | | | | [ ] |
+| 1 | moveSnake() | 任意方向で1回実行 | 頭が1マス進み、体が追従 | | [ ] |
+| 2 | spawnFood() | 複数回実行 | foodPosがスネークと重複しない | | [ ] |
+| 3 | checkCollision() | 頭を壁外へ移動 | 2を返す | | [ ] |
+| 4 | checkCollision() | 頭を胴体に重ねる | 2を返す | | [ ] |
+| 5 | checkCollision() | 頭をエサに重ねる | 1を返す | | [ ] |
+| 6 | addScore() | エサ取得時に呼ぶ | score加算、highScore更新、長さ増加 | | [ ] |
+| 7 | levelUp() | scoreを5刻みで増やす | moveIntervalが40msずつ短縮（下限100ms） | | [ ] |
+| 8 | gameOver() | 壁衝突時に呼ぶ | currentState=2へ遷移 | | [ ] |
 
-### 5-3. タイミング・並行動作テスト
+### 5-3. 出力・タイミングテスト
 
-| No | テスト内容 | テスト手順 | 期待する結果 | 実際の結果 | 合否 |
+| No | テスト対象 | 入力・操作 | 期待結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | delay()による処理停止がないか | LED点滅中にボタンを押す | ボタン入力が無視されない | | [ ] |
-| 2 | millis()タイマーの周期精度 | 点滅をストップウォッチで確認 | 設計した周期（例:500ms）通りに点滅 | | [ ] |
+| 1 | drawField() | 初期配置で呼ぶ | LEDにスネークとエサが表示される | | [ ] |
+| 2 | updateLCD() | score/highScore更新後に呼ぶ | LCD2行に正しく表示される | | [ ] |
+| 3 | playBGM() | ゲーム中に連続実行 | テンポ通りに音階が循環再生 | | [ ] |
+| 4 | loop()ゲーム中 | 一定時間放置 | moveInterval周期でのみ移動する | | [ ] |
+| 5 | loop()ゲームオーバー | 押し込みボタン入力 | 待機状態へ戻る | | [ ] |
 
 ---
 
 ## 6. AIレビュー記録
 
-> グループレビューの前に必ず実施してください。
-
 ### Q1: 実装上の問題確認
 
-> 「この詳細設計書に書いた関数と処理フローをもとに Arduino でコードを書きます。バグになりやすい箇所・処理の抜け・型の問題はありますか？」
+**AIの回答（要約）:**
+1. スネーク最大長付近での配列境界を確認すること。
+2. spawnFood() の再抽選ループが停止不能にならないことを確認すること。
+3. gameOver状態でtoneを毎ループ呼ぶため、鳴動の意図を確認すること。
 
-**AIの回答（要約）：**
-
-**対応した内容：**
+**対応した内容:**
+1. Section 5 に最大長・境界系テストを追加。
+2. Section 2/3 に重複回避ロジックを明記。
+3. gameOver時の挙動を設計書へ明記。
 
 ---
 
 ### Q2: 単体テスト仕様の確認
 
-> 「Section 5 の単体テスト仕様書で、各関数の動作が正しく検証できていますか？テストが不足している項目や、境界値テストが必要な箇所を教えてください。」
+**AIの回答（要約）:**
+1. 境界値（speedLevel=1/5, moveInterval=100）の確認を追加すべき。
+2. 逆方向入力禁止とデバウンスは独立観点で確認すべき。
 
-**AIの回答（要約）：**
-
-**対応した内容：**
+**対応した内容:**
+1. Section 5-1/5-2 に境界値観点を追加。
+2. 入力系テストを readJoystick 中心へ整理。
 
 ---
 
@@ -298,7 +411,7 @@
 
 | No | 指摘内容 | 指摘者 | 対応 |
 |:---|:---|:---|:---|
-| 1 |  |  |  |
+| 1 | ゲームオーバー時に待機画面に遷移する方法 | マウン | 記載されている為対応なし |
 | 2 |  |  |  |
 | 3 |  |  |  |
 
@@ -309,4 +422,4 @@
 
 ---
 
-*初版: YYYY-MM-DD / AIレビュー: YYYY-MM-DD / グループレビュー後更新: YYYY-MM-DD*
+*初版: 2026-05-25 / 実装整合更新: 2026-05-25 / グループレビュー後更新: 2026-05-25*

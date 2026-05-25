@@ -178,10 +178,9 @@
 | — | （共通）ボタン読出 | `readButton()` | チャタリング処理済みのボタン状態を返す | なし | bool | loop()内 |
 | — | （共通）センサー読出 | `readSensor()` | センサー値を取得して sensorValue を更新 | なし | int (cm) | loop()内 |
 | — | （共通）出力更新 | `updateOutput()` | 現在の state に応じて LED/ブザーを制御 | int state | なし | loop()内 |
-| F01 | 必須機能①（requirements転記） | `doFeature1()` | 必須機能①の処理を行う | — | — | loop()内 |
-| F02 | 必須機能②（requirements転記） | `doFeature2()` | 必須機能②の処理を行う | — | — | loop()内 |
-| A01 | 追加機能①（余裕があれば） | `doOptional1()` | 追加機能①の処理を行う | — | — | loop()内 |
-|  |  |  |  |  |  |  |
+| F01 | 必須機能①（requirements転記） | `editDigits()` | 必須機能①の処理を行う | — | — | loop()内 |
+| F02 | 必須機能②（requirements転記） | `applyDigitsToLed()` | 必須機能②の処理を行う | — | — | loop()内 |
+| A01 | 追加機能①（余裕があれば） | `runLedPattern()` | 追加機能①の処理を行う | — | — | loop()内 |
 | — | ジョイスティック読出 | `readJoystick()` | ジョイスティックのX/Y/SW値を取得し変数に格納 | なし | なし | loop()内 |
 | — | 桁選択処理 | `selectDigit()` | ジョイスティック横操作で選択中の桁を変更 | なし | なし | loop()内 |
 | — | 値変更処理 | `changeDigitValue()` | ジョイスティック縦操作で選択中の桁の値を変更 | なし | なし | loop()内 |

@@ -17,12 +17,12 @@
 
 ## 0. 基本設計書との接続確認
 
-| 項目 | basic_design.md から転記 |
+| 項目 | 内容 |
 |:--|:--|
-| 作品タイトル | |
-| 状態の種類（1-2 状態遷移から） | |
-| 実装する関数の数（2-2 関数一覧から） | 　個 |
-| グローバル変数の合計バイト数（2-1 SRAM確認から） | 　B |
+| 作品タイトル | ミニゲーム |
+| 状態の種類 | 初期化 / 待機 / プレイ / ゲームオーバー |
+| 実装関数数 | 約10個 |
+| SRAM使用量 | 約40〜60B |
 
 ---
 
@@ -33,24 +33,49 @@
 
 ```
 【ピン定義】（basic_design.md 3-1 から転記）
-  PIN_BUTTON    = 2    // タクトスイッチ（INPUT_PULLUP）
-  PIN_LED_RED   = 9    // 赤LED
-  PIN_LED_GREEN = 10   // 緑LED
-  PIN_BUZZER    = 11   // パッシブブザー
+const int PIN_JOY_X = A0;
+const int PIN_JOY_Y = A1;
+const int PIN_BUTTON = 2;
+const int PIN_DIN = 11;
+const int PIN_CS = 10;
+const int PIN_CLK = 13;
+const int PIN_BUZZER = 3;
 
 【状態管理】（basic_design.md 1-2 の状態名から転記）
-  currentState  : int = 0   // 0:待機 1:動作中 2:完了 3:エラー
+int currentState = 1; // 1:待機 2:プレイ 3:ゲームオーバー
 
 【タイマー（millis()用）】（basic_design.md 2-3 から転記）
-  lastMillis_LED    : unsigned long = 0
-  lastMillis_Sensor : unsigned long = 0
+unsigned long lastMoveMillis = 0;
+unsigned long lastEnemyMillis = 0;
+unsigned long lastDrawMillis = 0;
+unsigned long lastBlinkMillis = 0;
 
 【センサー・入力値】（basic_design.md 2-1 から転記）
-  sensorValue   : int  = 0
-  buttonState   : bool = false
+ int joyX = 512;
+int joyY = 512;
 
-【その他のフラグ・カウンター】
-  （自分のものを追加）
+
+
+【座標】
+int playerX = 3;
+int playerY = 3;
+int enemyX = 0;
+int enemyY = 0;
+
+【デバウンス処理】
+bool buttonEdge = false;
+unsigned long lastDebounceTime = 0;
+const int DEBOUNCE_DELAY = 50;
+
+【周期】
+const int MOVE_INTERVAL = 100;
+const int ENEMY_INTERVAL = 300;
+const int DRAW_INTERVAL = 50;
+const int BLINK_INTERVAL = 150;
+
+【点滅】
+bool enemyVisible = true;
+
 ```
 
 ---
@@ -83,9 +108,22 @@
 **↓ 自分の setup() を設計してください**
 ```
 【処理の流れ】
-1.
-2.
-3.
+1. ピンモードを設定する
+   - PIN_BUTTON → INPUT_PULLUP
+   - PIN_BUZZER → OUTPUT
+   - LEDマトリクス制御用ピン（D10, D11, D13）→ OUTPUT
+
+2. LEDマトリクスのライブラリ初期化
+   - MAX7219を使用するための初期設定を行う
+   - 明るさや表示モードを設定する
+
+3. Serial.begin(9600)（デバッグ用）
+
+4. 変数初期化
+   - playerX = 3, playerY = 3（中央）
+   - enemyX = 0, enemyY = ランダム(0～7)
+
+5. currentState = 待機状態（1）に設定
 ```
 
 ---
@@ -98,39 +136,46 @@
 【処理の流れ】
 
 ＜毎ループ実行すること＞
-  - 入力を読む（readButton(), readSensor() などを呼ぶ）
-  - 現在時刻を取得: now = millis()
+  - readJoystick() を呼び出す（スティック入力取得）
+  - readButtonEdge() を呼び出す（押し込み検出）
+  - now = millis() を取得
 
-＜currentState が 0（待機中）のとき＞
-  - センサー値を監視する
-  - 検知条件を満たしたら → currentState = 1
+＜currentState が 1（待機）のとき＞
+  - タイトル表示（点滅など）
+  - buttonEdge == true の場合
+      → resetGame() を実行
+      → currentState = 2（プレイ）
 
-＜currentState が 1（動作中）のとき＞
-  - メイン処理を行う
-  - 終了条件を満たしたら → currentState = 2
+＜currentState が 2（プレイ）のとき＞
+  - 一定時間経過したら movePlayer() を実行（100ms）
+   if (now - lastMoveMillis >= MOVE_INTERVAL)
+    movePlayer()
+    lastMoveMillis = now
 
-＜currentState が 2（完了）のとき＞
-  - 完了表示をする
-  - リセットボタンが押されたら → currentState = 0
+  - 一定時間経過したら updateEnemy() を実行（300ms）
+  if (now - lastEnemyMillis >= ENEMY_INTERVAL)
+    updateEnemy()
+    lastEnemyMillis = now
 
-＜currentState が 3（エラー）のとき＞
-  - エラー表示をする / リセットを待つ
+  - checkCollision() を実行
+      衝突した場合 → currentState = 3（ゲームオーバー）
+      if (checkCollision())
+    currentState = 3
+
+  - drawGame() を実行（50ms周期）
+  if (now - lastDrawMillis >= DRAW_INTERVAL)
+    drawGame()
+    lastDrawMillis = now
+
+＜currentState が 3（ゲームオーバー）のとき＞
+  - ゲームオーバー表示（全体点滅）
+  - buttonEdge == true の場合
+      → currentState = 1（待機へ戻る）
 ```
 
-**↓ 自分の loop() を設計してください**
-```
-【処理の流れ】
-
-＜毎ループ実行すること＞
 
 
-＜currentState が 　　 のとき＞
 
-
-＜currentState が 　　 のとき＞
-
-
-＜currentState が 　　 のとき＞
 
 ```
 
@@ -155,6 +200,134 @@
 1.
 2.
 3.
+
+---
+
+### `readJoystick()` — 方向入力変換
+引数： なし
+戻り値： struct { int dx; int dy; }（移動量）
+
+```
+【処理の流れ】
+1. 値を読む
+2. dx, dy 初期化
+3. 閾値判定
+4. 斜め無効化
+```
+
+---
+
+### `readButtonEdge()` — デバウンス処理
+引数： なし
+戻り値： bool（押された瞬間なら true）
+
+```
+【処理の流れ】
+1. ボタン状態取得
+2. 50ms判定
+3. 押下判定
+```
+
+---
+
+### `movePlayer()` — プレイヤー移動
+引数：
+
+x（int）: プレイヤーX座標
+y（int）: プレイヤーY座標
+dx（int）: X方向移動量
+dy（int）: Y方向移動量
+
+戻り値： void
+
+```
+【処理の流れ】
+1. 座標更新
+2. 範囲制限
+```
+
+---
+
+### `updateEnemy()` — 敵移動
+引数：
+enemyX（int&）: 敵X座標
+enemyY（int&）: 敵Y座標
+
+戻り値： void
+
+```
+【処理の流れ】
+1. X移動
+2. 端で再生成
+```
+
+---
+
+### `checkCollision()` — 衝突判定
+引数：
+playerX（int&）
+playerY（int&）
+enemyX（int）
+enemyY（int）
+
+戻り値： bool（衝突時 true）
+
+```
+【処理の流れ】
+1. 座標一致判定
+```
+
+---
+
+### `drawGame()` — 描画
+引数：
+playerX（int&）
+playerY（int&）
+enemyX（int）
+enemyY（int）
+
+戻り値： bool（衝突時 true）
+
+```
+【処理の流れ】
+1. 画面クリア
+2. プレイヤー描画
+3. 敵描画（点滅）
+```
+
+---
+
+### `resetGame()` — 初期化
+引数：
+playerX（int&）
+playerY（int&）
+enemyX（int&）
+enemyY（int&）
+
+戻り値： void
+
+```
+【処理の流れ】
+1. プレイヤー中央
+2. 敵再配置
+```
+
+---
+
+### `handleGameOverInput()` - 待機画面に戻る
+引数：
+buttonPressed（bool）: ボタン押下状態
+
+戻り値： bool（待機画面に戻るなら true）
+
+```
+【処理の流れ】
+1. 押し込みで待機戻り
+```
+
+
+
+
 
 【エラー・異常ケース】
 - 異常な値が来た場合:
@@ -201,13 +374,29 @@
 【自分のシステムで millis() を使う処理】
   （basic_design.md 2-3 のタイミング設計から転記して具体化する）
 ```
-
+| 処理 | 必要な周期 | delay / millis | 判断の理由 |
+|:--|:--|:--|:--|
+| 入力読み取り（スティック/ボタン） | 毎ループ（できるだけ高頻度） | **millis（不要）** | 入力は毎ループ実行でOK（delayなし） |
+| プレイヤー移動 | 100ms | **millis** | 早すぎると操作が敏感、遅いと重い → 100msはバランス良い |
+| 敵移動 | 300ms（難易度で変更） | **millis** | 体感速度を調整しやすい（難易度で150〜600ms目安） |
+| 描画更新 | 50ms | **millis** | 20fps相当（見やすい、処理負荷も軽い） |
+| 敵点滅（区別） | 150ms | **millis** | 人が認識しやすい点滅速度（速すぎ/遅すぎを避ける） |
+| ブザー鳴動（効果音） | 50〜200ms程度 | **millis** | delayを避けて入力停止を防ぐ |
 ---
 
 ### 3-3. その他の重要ロジック（任意）
 
 > **【任意】** 複雑なロジックがある場合のみ記入してください。
 > 例：「距離に応じたLED点灯パターン」「ゲームの衝突判定」「温度の閾値判定」
+
+### デバウンス
+50ms以内は無視
+
+### millis()制御
+全周期処理で使用
+
+### 衝突判定
+座標一致でゲームオーバー
 
 ```
 【処理の流れ】
@@ -229,10 +418,15 @@
 
 | No | 確認したい内容 | 挿入する関数 | Serial.println の内容例 |
 |:---|:---|:---|:---|
-| 1 | センサー値が正しく取れているか | `readSensor()` | `Serial.println(sensorValue);` |
-| 2 | 状態遷移が正しく起きているか | `loop()` | `Serial.println(currentState);` |
-| 3 | チャタリング処理が効いているか | `readButton()` | `Serial.println("btn confirmed");` |
-| 4 |  |  |  |
+| 1 | ジョイスティック値が正しく取れているか | `readJoystick()` | `Serial.println(joyX); Serial.println(joyY);` |
+| 2 | 方向変換が正しくできているか | `readJoystick()` | `Serial.println(dx); Serial.println(dy);` |
+| 3 | 状態遷移が正しく起きているか | `loop()` | `Serial.println(currentState);` |
+| 4 | ボタンのデバウンスが機能しているか | `readButtonEdge()` | `Serial.println("button pressed");` |
+| 5 | プレイヤー座標が正しく更新されているか | `movePlayer()` | `Serial.println(playerX); Serial.println(playerY);` |
+| 6 | 敵の移動が正しく行われているか | `updateEnemy()` | `Serial.println(enemyX); Serial.println(enemyY);` |
+| 7 | 衝突判定が正しく動作しているか | `checkCollision()` | `Serial.println("collision detected");` |
+| 8 | 点滅処理が動作しているか | `drawGame()` | `Serial.println(enemyVisible);` |
+
 
 ---
 
@@ -245,26 +439,34 @@
 
 | No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | readButton() | タクトスイッチを1回押す | true が返る | | [ ] |
-| 2 | readButton() | スイッチを素早く2回押す | 1回分だけ true になる | | [ ] |
-| 3 | readSensor() | センサーを正常範囲で使う | 仕様範囲内の値が返る | | [ ] |
-| 4 | readSensor() | センサーを遮蔽・範囲外に向ける | 誤動作しない | | [ ] |
-| 5 | （自分の関数を追加） | | | | [ ] |
+| 1 | readButtonEdge() | タクトスイッチを1回押す | true が1回だけ返る | | [ ] |
+| 2 | readButtonEdge() | スイッチを素早く2回押す | 1回分だけ true になる（デバウンス有効） | | [ ] |
+| 3 | readJoystick() | スティックを右に倒す | dx=1, dy=0 になる | | [ ] |
+| 4 | readJoystick() | スティックを左に倒す | dx=-1, dy=0 になる | | [ ] |
+| 5 | readJoystick() | スティックを中央付近で少し動かす | dx=0, dy=0（誤動作しない） | | [ ] |
+| 6 | readJoystick() | 最大値(1023) | +1 |
+| 7 | readJoystick() | 最小値(0) | -1 |
+| 8 | リセット | 連続操作 | 正常動作 |
 
 ### 5-2. 出力系テスト
 
 | No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | updateOutput(0) | state=0（待機中）を渡す | 緑LEDが点滅する | | [ ] |
-| 2 | updateOutput(1) | state=1（動作中）を渡す | 赤LEDが点灯、ブザーが鳴る | | [ ] |
-| 3 | （自分の状態・関数を追加） | | | | [ ] |
+| 1 | drawGame() | プレイヤー座標を設定 | 指定位置にドットが表示される | | [ ] |
+| 2 | drawGame() | enemyVisible=true | 敵が表示される | | [ ] |
+| 3 | drawGame() | enemyVisible=false | 敵が消える | | [ ] |
+| 4 | handleGameOverInput() | ゲームオーバー中に押し込み | 待機状態に戻る | | [ ] |
+| 5 | movePlayer() | 端で移動 | 画面外に出ない |
+| 6 | updateEnemy() | 複数回更新 | 0〜7範囲 |
 
 ### 5-3. タイミング・並行動作テスト
 
 | No | テスト内容 | テスト手順 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | delay()による処理停止がないか | LED点滅中にボタンを押す | ボタン入力が無視されない | | [ ] |
-| 2 | millis()タイマーの周期精度 | 点滅をストップウォッチで確認 | 設計した周期（例:500ms）通りに点滅 | | [ ] |
+| 1 | delay()による処理停止がないか | プレイ中にスティック＋ボタン操作 | 入力が常に反映される | | [ ] |
+| 2 | プレイヤー移動周期 | 測定する | 約100msで移動する | | [ ] |
+| 3 | 敵移動周期 | 測定する | 約300msで移動する | | [ ] |
+| 4 | 点滅周期 | 測定する | 約150msで点滅する | | [ ] |
 
 ---
 
@@ -278,7 +480,20 @@
 
 **AIの回答（要約）：**
 
+- `readButtonEdge()` のデバウンス処理は適切だが、押しっぱなし時に連続して反応する可能性があるため、「押した瞬間のみ」を厳密に検出する必要がある  
+- `millis()` を用いた複数タイマー（移動・敵・描画）が同時に動作するため、各タイマーの更新忘れ（lastMillis の更新忘れ）に注意が必要  
+- `checkCollision()` の戻り値を loop() 側で適切に判定しないと、ゲームオーバー状態に遷移しない可能性がある  
+- プレイヤーや敵の座標が範囲外に出るケースを防ぐため、範囲制限処理を確実に実装する必要がある  
+- ジョイスティック入力で斜め移動を無効化しているが、分岐順が曖昧だと意図しない動作になる可能性がある 
+
+
 **対応した内容：**
+
+- ボタン入力は「押下エッジ検出」とし、押しっぱなしでは反応しない仕様に修正した  
+- 各 `millis()` 処理で、処理実行後に `last○○Millis` を必ず更新するよう仕様を明確化した  
+- 衝突判定の戻り値を `loop()` 内で必ずチェックし、衝突時に `currentState = 3` に遷移するよう修正した  
+- `movePlayer()` 内でプレイヤー座標を0～7に制限する処理を明確に記述した  
+- 方向入力は「X軸優先」として処理順を固定し、誤動作を防止した  
 
 ---
 
@@ -288,7 +503,20 @@
 
 **AIの回答（要約）：**
 
+
+- 入力・出力・タイミングのテストは全体的に網羅されており、基本的な機能確認として十分である  
+- ただし、アナログ入力（ジョイスティック）の最大値・最小値などの境界値テストが不足している  
+- プレイヤーが画面端（0や7）で正しく停止するかのテストがあるとより良い  
+- 敵の再生成位置が範囲内（0～7）であることの確認テストも追加すると望ましい  
+- ゲームオーバー後の状態復帰（GO → 待機）を複数回繰り返すテストも有効
+
+
 **対応した内容：**
+
+- ジョイスティックの最大値・最小値入力時の動作確認テストを追加した  
+- プレイヤーが画面端で停止するかを確認するテストを追加した  
+- 敵の再生成位置が0～7の範囲内であることを確認するテストを追加した  
+- ゲームオーバー後に複数回リセット操作を行い、状態遷移が安定しているか確認するテストを追加した 
 
 ---
 
@@ -298,13 +526,13 @@
 
 | No | 指摘内容 | 指摘者 | 対応 |
 |:---|:---|:---|:---|
-| 1 |  |  |  |
-| 2 |  |  |  |
+| 1 | 敵の座標は1つで足りる？ | 山田汰知 | 敵は1体なので、敵の座標は１つのまま |
+| 2 | 関数の引数の書き忘れ | 自分 |  |
 | 3 |  |  |  |
 
 ### 7-2. レビューを受けて変更した点
 
--
+-関数の引数を記入
 -
 
 ---
