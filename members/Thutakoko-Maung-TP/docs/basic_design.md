@@ -25,8 +25,8 @@
 | 一言説明（何ができるガジェットか） | 物の距離をはかり、近くに物があればアラートを出す装置 |
 | 使用する共通部品（グループ共通） | ジョイスティック |
 | 追加部品（個人・主なもの） | SG90 サーボモーター / HC‑SR04 超音波センサー / アクティブブザー/LED |
-| 必須機能の数（3-1の件数） | 　3件 |
-| 追加機能の数（3-2の件数） | 　3件 |
+| 必須機能の数（3-1の件数） | 　4件 |
+| 追加機能の数（3-2の件数） | 　0件 |
 
 ### English :
 | Item | Copied from requirements.md |
@@ -35,8 +35,8 @@
 | One‑sentence description (What the gadget does) | Measures the distance to objects and triggers an alert when something is close |
 | Common parts used (shared by group) | Joystick |
 | Additional parts (individual / main components) | SG90 Servo Motor / HC‑SR04 Ultrasonic Sensor / Active Buzzer / LED |
-| Number of required functions (from Section 3‑1) | 3 |
-| Number of additional functions (from Section 3‑2) | 3 |
+| Number of required functions (from Section 3‑1) | 4 |
+| Number of additional functions (from Section 3‑2) | 0 |
 
 > [!IMPORTANT]
 > 要件定義書の「やらないこと（3-3）」に書いたことは、この設計書に登場させないこと。
@@ -56,7 +56,7 @@
 | 共通部品が担う役割 | サーボの角度を操作するため |
 | 接続するArduinoピン（予定） | A0 |
 | 個人の設計と共通部品が協調する箇所 | ジョイスティックを左に倒すと、サーボが左に回転し、超音波センサーがその方向をスキャンする。 |
-| グループ内で統一すべき仕様 | A0,A1,D2,512 ± 50 |
+| グループ内で統一すべき仕様 | A0,A1,D2,左閾値<400,右閾値>600 |
 
 ### English :
 | Item | Content |
@@ -65,7 +65,7 @@
 | Role of the common component | To control the servo angle |
 | Arduino pins to be connected (planned) | A0 |
 | Where the individual design cooperates with the common component | When the joystick is pushed to the left, the servo rotates left and the ultrasonic sensor scans in that direction. |
-| Specifications that must be unified within the group | A0,A1,D2,512 ± 50 |
+| Specifications that must be unified within the group | A0,A1,D2, left threshold <400, right threshold >600 |
 
 > [!TIP]
 > グループメンバー全員が同じピン番号・同じ閾値の単位を使っているか、
@@ -153,13 +153,12 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 [電源ON / 初期化]
 
   ↓（初期化完了）
-[待機中] ──（ジョイスティック操作開始）──→ [スキャン計測中] ──（距離 <= 20cm）──→ [警告中]
+[待機中] ──（loop開始）──→ [スキャン計測中]
 
-   ↑                                                                                 │
-   └──────────────────────────────（ジョイスティック中立 / 監視継続）───────┘
+[スキャン計測中] ──（distance > 0 かつ <= 20cm）──→ [警告中]
+[警告中] ──（distance == 0 または > 20cm）──→ [スキャン計測中]
 
-
-[警告中] ──（距離 > 20cm）──→ [スキャン計測中]
+※ ボタン押下（LOW確定）時は、状態遷移せずにサーボ角度のみ90°へリセット
 
 
 ```
@@ -169,11 +168,12 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 ```
 [Power ON / Initialization]
   ↓ (Initialization complete)
-[Standby] ── (Joystick movement detected) ──→ [Scanning / Measuring] ── (Distance <= 20 cm) ──→ [Alert]
-   ↑                                                                                                  │
-   └────────────────────────────── (Joystick neutral / keep monitoring) ─────────────────────────────┘
+[Standby] ── (loop starts) ──→ [Scanning / Measuring]
 
-[Alert] ── (Distance > 20 cm) ──→ [Scanning / Measuring]
+[Scanning / Measuring] ── (distance > 0 and <= 20 cm) ──→ [Alert]
+[Alert] ── (distance == 0 or > 20 cm) ──→ [Scanning / Measuring]
+
+*When joystick button press is confirmed (LOW), servo resets to 90° without changing state.*
 
 ```
 
@@ -182,16 +182,18 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 ### 日本語 :
 | 状態名 | この状態のとき、何をしているか | LEDやブザーなど出力の様子 |
 |:--|:--|:--|
-| 待機中 | ジョイスティック入力待ち。超音波センサー値を周期的に監視する。 | LED OFF、ブザーOFF（監視のみ）。|
-| スキャン計測中 | ジョイスティックX軸に合わせてサーボ角度を更新し、距離と角度をシリアル表示する。 | LED OFF、ブザーOFF。|
+| 待機中 | setup直後の初期状態。loop開始でスキャン計測へ移行する。 | LED OFF、ブザーOFF。|
+| スキャン計測中 | 毎ループでジョイスティック処理・ボタン判定・距離計測を実行する。 | LED OFF、ブザーOFF（安全時）。|
 | 警告中 | 距離が20cm以下の対象を検知し、警告状態を維持する。| LED ON、ブザーON（距離が20cmを超えたら停止）。|
 
 ### English :
 | State Name | What the system is doing in this state | LED, buzzer, and other outputs in this state |
 |:--|:--|:--|
-| Standby | Waits for joystick input and periodically monitors ultrasonic distance. | LED OFF, buzzer OFF (monitoring only). |
-| Scanning-Measuring | Updates servo angle from joystick X-axis and outputs angle-distance data to Serial Monitor. | LED OFF, buzzer OFF. |
+| Standby | Initial state right after setup; transitions to scanning when loop starts. | LED OFF, buzzer OFF. |
+| Scanning-Measuring | Runs joystick handling, reset-button check, and ultrasonic measurement every loop. | LED OFF, buzzer OFF (safe condition). |
 | Alert | Keeps alert state when an object is detected within 20 cm. | LED ON, buzzer ON (turns off when distance is over 20 cm). |
+
+補足（実装整合）：現行実装は `currentState` 変数を持たず、条件分岐（distance と入力値）で同等の状態遷移を実現している。
 
 > [!TIP]
 > すべての状態から「抜け出せるルート」があるか確認してください。
@@ -210,19 +212,35 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 | 情報の名前 | 何を表すか | 型（イメージ） | バイト数 | 初期値 | 備考 |
 | --- | --- | --- | --- | --- | --- |
 | servoAngle | サーボモーターの角度 | int | 2B | 90 | 0〜180度 |
-| distance | 超音波センサーの計測距離 | int | 2B | 0 | 100msごとに更新（cm） |
-| alertFlag | アラート状態フラグ | bool | 1B | false | 20cm以下で true |
-| joystickX | ジョイスティックX軸値 | int | 2B | 512 | 0〜1023 |
-| lastAlertMillis | アラート用タイマー | unsigned long | 4B | 0 | millis() 用 |
+| distance | 超音波センサーの計測距離 | int | 2B | 0 | loopごとに更新（cm） |
+| alertState | アラート状態フラグ | bool | 1B | false | 20cm以下で true |
+| buttonState | ボタンの確定状態 | int | 2B | HIGH | INPUT_PULLUPでLOW押下 |
+| lastButtonState | ボタンの前回読み取り状態 | int | 2B | HIGH | 変化検出用 |
+| lastDebounceTime | デバウンス開始時刻 | unsigned long | 4B | 0 | millis() 用 |
+| debounceDelay | デバウンス時間 | unsigned long | 4B | 50 | ms |
+| lastServoMove | サーボ更新用タイマー | unsigned long | 4B | 0 | millis() 用（10ms） |
+| servoInterval | サーボ更新周期 | unsigned long | 4B | 10 | ms |
+| lastAlertBlink | ブザー点滅用タイマー | unsigned long | 4B | 0 | millis() 用（200ms） |
+| alertInterval | ブザー点滅周期 | unsigned long | 4B | 200 | ms |
+| buzzerState | ブザーON/OFF状態 | bool | 1B | false | トグル制御 |
+| duration | 超音波エコー時間 | long | 4B | 0 | pulseIn() 結果 |
 
 ### English :
 | Data Name | What it represents | Type (image) | Bytes | Initial Value | Notes |
 | --- | --- | --- | --- | --- | --- |
 | servoAngle | Servo motor angle | int | 2B | 90 | Range 0–180° |
-| distance | Ultrasonic sensor measured distance | int | 2B | 0 | Updated every 100 ms (cm) |
-| alertFlag| Alert state flag | bool | 1B | false | True when distance ≤ 20 cm |
-| joystickX | Joystick X‑axis value | int | 2B | 512 | Range 0–1023 |
-| lastAlertMillis | Timer for alert output | unsigned long | 4B | 0 | Used with millis() |
+| distance | Ultrasonic sensor measured distance | int | 2B | 0 | Updated every loop (cm) |
+| alertState | Alert state flag | bool | 1B | false | True when distance ≤ 20 cm |
+| buttonState | Debounced button state | int | 2B | HIGH | LOW means pressed |
+| lastButtonState | Previous button reading | int | 2B | HIGH | For change detection |
+| lastDebounceTime | Debounce start timestamp | unsigned long | 4B | 0 | Used with millis() |
+| debounceDelay | Debounce window | unsigned long | 4B | 50 | ms |
+| lastServoMove | Timer for servo update | unsigned long | 4B | 0 | Used with millis() (10 ms) |
+| servoInterval | Servo update interval | unsigned long | 4B | 10 | ms |
+| lastAlertBlink | Timer for buzzer blink | unsigned long | 4B | 0 | Used with millis() (200 ms) |
+| alertInterval | Buzzer blink interval | unsigned long | 4B | 200 | ms |
+| buzzerState | Current buzzer ON/OFF state | bool | 1B | false | Toggle control |
+| duration | Ultrasonic echo duration | long | 4B | 0 | pulseIn() result |
 
 > [!CAUTION]
 > **SRAM使用量チェック（Arduino UNO R3 の上限は 2048B）**
@@ -249,18 +267,18 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 ### 日本語 :
 | 機能ID | 機能名 | 関数名 | 担う「1つの仕事」 | 主な引数 | 戻り値 | 呼び出す場所 |
 | --- | --- | --- | --- | --- | --- | --- |
-| F01 | サーボをジョイスティックで制御 | controlServoWithJoystick() | ジョイスティックX軸から角度を計算し、サーボを動かす | joystickX | なし | loop() 内 |
-| F02 | 超音波センサーで距離計測 | measureDistance() | 超音波で距離を測定し、distance に保存 | なし | int（cm） | loop() 内 |
-| F03 | アラート出力 | alertOutput() | 距離が20cm以下ならLED/ブザーON、超えたらOFF | distance | なし | loop() 内 |
-| F04 | 角度・距離表示 | displayStatus() | サーボ角度と距離をシリアルモニターに表示 | servoAngle, distance | なし | loop() 内 |
+| F01 | サーボをジョイスティックで制御 | handleJoystick() | ジョイスティックX軸の閾値（<400, >600）で角度を±1更新しサーボを動かす | なし | なし | loop() 内 |
+| F02 | 超音波センサーで距離計測 | readUltrasonic() | 超音波で距離を測定して戻り値で返す | なし | int（cm） | loop() 内 |
+| F03 | アラート出力 | handleAlert() | 距離が20cm以下ならLED/ブザー制御、離れたら停止 | distance | なし | loop() 内 |
+| F04 | ボタンで90°リセット | handleResetButton() | ボタン入力をデバウンスし、押下時にサーボを90°へ戻す | なし | なし | loop() 内 |
 
 ### English :
 | Function ID | Function Name | Function | Single Responsibility (What it does) | Main Arguments | Return Value | Called From |
 | --- | --- | --- | --- | --- | --- | --- |
-| F01 | Control servo with joystick | controlServoWithJoystick() | Calculates servo angle from joystick X‑axis and moves the servo | joystickX | None | Inside loop() |
-| F02 | Measure distance with ultrasonic sensor | measureDistance() | Measures distance using ultrasonic sensor and stores it in *distance* | None | int (cm) | Inside loop() |
-| F03 | Alert output | alertOutput() | Turns LED/buzzer ON if distance ≤ 20 cm, OFF otherwise | distance | None | Inside loop() |
-| F04 | Display angle & distance | displayStatus() | Shows servo angle and distance on Serial Monitor | servoAngle, distance | None | Inside loop() |
+| F01 | Control servo with joystick | handleJoystick() | Updates servo angle by threshold (<400, >600) and moves servo | None | None | Inside loop() |
+| F02 | Measure distance with ultrasonic sensor | readUltrasonic() | Measures distance using ultrasonic sensor and returns cm value | None | int (cm) | Inside loop() |
+| F03 | Alert output | handleAlert() | Turns LED/buzzer ON if distance ≤ 20 cm, OFF otherwise | distance | None | Inside loop() |
+| F04 | Reset servo by button | handleResetButton() | Debounces button input and resets servo to 90° when pressed | None | None | Inside loop() |
 
 > [!CAUTION]
 > loop() の中で全部書こうとしていませんか？
@@ -274,18 +292,18 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 ### 日本語 :
 | 処理 | 必要な周期 | delay / millis | 判断理由 |
 | --- | --- | --- | --- |
-| サーボ制御 | 20ms | millis | サーボの応答性を保つため |
-| 距離計測 | 100ms | millis | 常時監視が必要なため |
-| アラート出力 | 100ms | millis | 状態変化にすぐ反応するため |
-| 角度・距離表示 | 100ms | millis | シリアル表示を定期更新するため |
+| サーボ制御 | 10ms | millis | 実装の servoInterval=10ms に合わせるため |
+| 距離計測 | 毎ループ | 関数呼び出し | loop() ごとに readUltrasonic() を実行するため |
+| アラート出力 | 200ms（ブザー点滅） | millis | 実装の alertInterval=200ms に合わせるため |
+| 角度・距離表示 | イベント発生時 | Serial出力 | 角度変化時/距離2cm以上変化時のみ出力するため |
 
 ### English :
 | Process | Required Interval | delay / millis | Reason |
 | --- | --- | --- | --- |
-| Servo control | 20 ms | millis | To maintain servo responsiveness |
-| Distance measurement | 100 ms | millis | Continuous monitoring required |
-| Alert output | 100 ms | millis | Needs quick reaction to state changes |
-| Angle & distance display | 100 ms | millis | For periodic serial updates |
+| Servo control | 10 ms | millis | Matches implementation value `servoInterval=10` |
+| Distance measurement | Every loop | Function call | `readUltrasonic()` is called in each loop |
+| Alert output | 200 ms (buzzer blink) | millis | Matches implementation value `alertInterval=200` |
+| Angle & distance display | On event | Serial output | Printed only on angle change / distance delta >= 2 cm |
 
 > [!CAUTION]
 > `delay()` を使う場合、その間はボタン入力もセンサー読み取りも**すべて止まります**。
@@ -353,16 +371,16 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 | 異常ケース | 発生条件 | 検知方法 | 対応方針 |
 | --- | --- | --- | --- |
 | チャタリング | ボタンを押したとき | 前回入力から50ms未満の入力を検出 | デバウンス処理でスキップ |
-| センサー異常値 | センサーが誤読したとき | 値が仕様範囲外（例: 0 または 400cm超） | その値を無視・前回値を使用 |
-| アナログノイズ | アナログ入力を読んだとき | 閾値付近で値が揺れる | 閾値に±10〜20のバッファを設ける |
+| センサー異常値 | センサーが誤読したとき | 値が0（pulseInタイムアウト相当） | distance>0 条件でアラート判定から除外 |
+| アナログノイズ | アナログ入力を読んだとき | 閾値付近で値が揺れる | 中立域（400〜600）で不必要な移動を抑制 |
 | サーボ異常 | サーボが動かない／異常音 | サーボ角度が変化しない | エラー表示・再初期化 |
 
 ### English :
 | Abnormal Case | Condition | Detection Method | Response Policy |
 | --- | --- | --- | --- |
 | Chattering | When a button is pressed | Detect input occurring within 50 ms of previous input | Skip using debounce processing |
-| Sensor abnormal value | When the sensor misreads | Value outside valid range (e.g., 0 or > 400 cm) | Ignore the value and use previous value |
-| Analog noise | When reading analog input | Value fluctuates near threshold | Add ±10–20 buffer around threshold |
+| Sensor abnormal value | When the sensor misreads | Distance becomes 0 (pulse timeout equivalent) | Exclude from alert condition by requiring `distance > 0` |
+| Analog noise | When reading analog input | Value fluctuates near thresholds | Use neutral band (400–600) to suppress unnecessary movement |
 | Servo malfunction | Servo not moving / strange noise | Servo angle does not change | Show error / reinitialize |
 ---
 
@@ -371,18 +389,18 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 ### 日本語 :
 | No | 必須機能（requirements.md 3-1 から転記） | 対応するSW設計（関数名等） | 対応するHW設計（ピン等） | 結合テスト No |
 |:---|:---|:---|:---|:---|
-| 1 | ジョイスティックの動きに合わせてサーボモーターを回すことができる | controlServoWithJoystick() | D3, A0 | Test#1 |
-| 2 | 超音波センサーで距離をはかることができる | measureDistance() | D9, D10 | Test#2 |
-| 3 | 現在の角度と距離をシリアルモニターに表示できる | displayStatus() | D3, D9, D10 | Test#3 |
-| 4 | 近くに物があるとLEDとブザーでアラートを出すことができる | alertOutput() | D6, D8 | Test#4 |
+| 1 | ジョイスティックの動きに合わせてサーボモーターを回すことができる | handleJoystick() | D3, A0 | Test#1 |
+| 2 | 超音波センサーで距離をはかることができる | readUltrasonic() | D9, D10 | Test#2 |
+| 3 | 現在の角度と距離をシリアルモニターに表示できる | handleJoystick(), handleAlert() | D3, D9, D10 | Test#3 |
+| 4 | 近くに物があるとLEDとブザーでアラートを出すことができる | handleAlert() | D6, D8 | Test#4 |
 
 ### English :
 | No | Required Feature (from requirements.md 3-1) | Corresponding SW Design (function name) | Corresponding HW Design (pins) | Integration Test No |
 |:---|:---|:---|:---|:---|
-| 1 | Rotate servo with joystick | controlServoWithJoystick() | D3, A0 | Test#1 |
-| 2 | Measure distance with ultrasonic sensor | measureDistance() | D9, D10 | Test#2 |
-| 3 | Display angle & distance on Serial Monitor | displayStatus() | D3, D9, D10 | Test#3 |
-| 4 | Alert with LED & buzzer when object is close | alertOutput() | D6, D8 | Test#4 |
+| 1 | Rotate servo with joystick | handleJoystick() | D3, A0 | Test#1 |
+| 2 | Measure distance with ultrasonic sensor | readUltrasonic() | D9, D10 | Test#2 |
+| 3 | Display angle & distance on Serial Monitor | handleJoystick(), handleAlert() | D3, D9, D10 | Test#3 |
+| 4 | Alert with LED & buzzer when object is close | handleAlert() | D6, D8 | Test#4 |
 
 ---
 
@@ -422,19 +440,19 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 - ピン競合はありません。各部品のピン割り当ても適切です。
 - ライブラリ競合も特に発生しません（Servo, NewPing等の標準的なライブラリで十分）。
 - 状態遷移も抜けがなく、すべての状態から抜け出せるルートが設計されています。
-- delay()は使わず、millis()によるタイミング管理なので、複数処理の並行動作も問題ありません。
+- `delay()` は未使用だが、`delayMicroseconds()` と `pulseIn()`（ブロッキング呼び出し）を使うため、厳密には完全非ブロッキングではありません。
 
 **AI’s Answer (Summary) :**
 - There are no pin conflicts. Pin assignments for each component are appropriate.
 - No library conflicts are expected (standard libraries like Servo and NewPing are sufficient).
 - The state transitions are complete, and every state has a clear exit route.
-- No issues with delay(): all timing is managed with millis(), so multiple processes can run in parallel without blocking.
+- `delay()` is not used, but `delayMicroseconds()` and blocking `pulseIn()` are used, so the loop is not fully non-blocking.
 
 **対応した内容：**
-- 指摘事項なし。現状の設計で問題ありません。
+- ブロッキング呼び出し（`pulseIn()`）の注意点を設計上の補足として明記。
 
 **Actions Taken**
-- No issues found. The current design is appropriate. 
+- Added a design note that `pulseIn()` is blocking and may affect responsiveness.
 
 ---
 
@@ -445,19 +463,19 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 
 **AIの回答（要約）：**
 - チャタリング対策として、ボタン入力にデバウンス処理が設計されています。
-- delay()は使わず、millis()でタイミング管理しているため、他の処理が止まる心配はありません。
+- `delay()` は未使用だが、`delayMicroseconds()` と `pulseIn()` を使うため、完全にノンブロッキングではありません。
 - アナログセンサーのノイズ対策として、閾値にバッファ（±10〜20）を設けています。
 
 **AI’s Answer (Summary) :**
 - Debounce processing is included for button input to prevent chattering.
-- No use of delay(); all timing is managed with millis(), so no blocking of other processes.
+- `delay()` is not used, but `delayMicroseconds()` and `pulseIn()` are used, so the loop is not fully non-blocking.
 - For analog sensor noise, a buffer (±10–20) is set around the threshold.
 
 **対応した内容：**
-- すべて設計に反映済み。追加対応は不要です。
+- `pulseIn()` のブロッキング特性を注意点として追記済みです。
 
 **Actions Taken**
-- All points are already reflected in the design. No further action needed.
+- Added note that `pulseIn()` can block the loop and affect responsiveness.
 ---
 
 ### Q3: 要件への対応漏れ確認（任意）
@@ -495,4 +513,4 @@ Ultrasonic Sensor     ─→┤  Joystick value → angle control      │
 
 ---
 
-*初版: YYYY-MM-DD / AIレビュー: YYYY-MM-DD / グループレビュー後更新: YYYY-MM-DD*
+*初版: 2026-05-22 / AIレビュー: 2026-05-22 / グループレビュー後更新: 2026-05-22*
