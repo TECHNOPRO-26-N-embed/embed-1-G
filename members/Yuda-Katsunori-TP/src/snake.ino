@@ -37,6 +37,8 @@ int snakeLength = 3;
 int foodPos[2];
 int score = 0;
 int highScore = 0;
+int highScoreByStartLevel[MAX_SPEED_LEVEL + 1] = {0};
+int gameStartLevel = 3;
 bool buzzerFlag = false;
 char lcdText[16];
 unsigned long lastDebounceTime = 0;
@@ -44,7 +46,14 @@ unsigned long lastDebounceTime = 0;
 int dirX = 1; // 初期は右
 int dirY = 0;
 int speedLevel = 3;
+int currentLevel = 3;
 unsigned long lastSpeedAdjustMillis = 0;
+int bgmDuration = 250; // BGMのテンポを変更可能に
+
+// レベルアップ演出管理用
+bool isLevelUpEffect = false;
+unsigned long levelUpEffectStart = 0;
+int levelUpEffectPhase = 0; // 0:未実行 1:LCD表示中 2:効果音中
 
 // ライブラリインスタンス
 LedControl lc = LedControl(PIN_LED_DIN, PIN_LED_CLK, PIN_LED_CS, 1);
@@ -91,8 +100,29 @@ void setup() {
 void loop() {
   readJoystick();
   unsigned long now = millis();
-  // joyBtnの立ち上がり検出
   bool pressed = (!prevJoyBtn && joyBtn);
+
+  // レベルアップ演出中は専用処理
+  if (isLevelUpEffect) {
+    if (levelUpEffectPhase == 1) {
+      // LCD表示中
+      if (now - levelUpEffectStart >= 1000) {
+        updateLCD();
+        tone(PIN_BUZZER_PASSIVE, 2000, 300); // 効果音
+        levelUpEffectStart = now;
+        levelUpEffectPhase = 2;
+      }
+    } else if (levelUpEffectPhase == 2) {
+      // 効果音中
+      if (now - levelUpEffectStart >= 300) {
+        isLevelUpEffect = false;
+        levelUpEffectPhase = 0;
+      }
+    }
+    prevJoyBtn = joyBtn;
+    return; // 通常処理をスキップ
+  }
+
   switch (currentState) {
     case 0: // 待機
       lc.setRow(0, 0, B11111111); // タイトル表示
@@ -107,18 +137,24 @@ void loop() {
           tone(PIN_BUZZER_PASSIVE, 900, 40);
         }
       }
-      lcd.setCursor(0, 0);
-      lcd.print("Push to Start   ");
-      lcd.setCursor(0, 1);
-      lcd.print("Speed:");
-      lcd.print(speedLevel);
-      lcd.print(" (1-5)   ");
+      if (!isLevelUpEffect) {
+        lcd.setCursor(0, 0);
+        lcd.print("Push to Start   ");
+        lcd.setCursor(0, 1);
+        lcd.print("Speed:");
+        lcd.print(speedLevel);
+        lcd.print(" (1-5)   ");
+      }
       if (pressed) {
         currentState = 1;
+        gameStartLevel = speedLevel;
+        currentLevel = gameStartLevel;
         snakeLength = 3;
         score = 0;
+        highScore = highScoreByStartLevel[gameStartLevel];
         bgmIndex = 0;
         lastBgmMillis = 0;
+        bgmDuration = 250; // BGMテンポを初期化
         moveInterval = 420 - (speedLevel * 60);
         spawnFood();
         for (int i = 0; i < snakeLength; i++) {
@@ -146,10 +182,10 @@ void loop() {
           gameOver();
         }
         drawField();
-        updateLCD();
+        if (!isLevelUpEffect) {
+          updateLCD();
+        }
       }
-      // ...existing code...
-      // ...existing code...
       break;
     case 2: // ゲームオーバー
       lc.setRow(0, 0, B10011001); // GAME OVER表示例
@@ -221,7 +257,10 @@ int checkCollision() {
 
 void addScore() {
   score++;
-  if (score > highScore) highScore = score;
+  if (score > highScoreByStartLevel[gameStartLevel]) {
+    highScoreByStartLevel[gameStartLevel] = score;
+    highScore = score;
+  }
   if (score % 5 == 0) levelUp();
   if (snakeLength < MAX_SNAKE) snakeLength++;
 }
@@ -237,14 +276,14 @@ void updateLCD() {
   lcd.setCursor(0, 0);
   lcd.print("Score:");
   lcd.print(score);
+  lcd.print(" Lv:");
+  lcd.print(currentLevel);
   lcd.setCursor(0, 1);
   lcd.print("Hi:");
   lcd.print(highScore);
 }
 
 // BGMデータ（音階確認テストデータを本実装化）
-const int BGM_DURATION = 250;
-
 const int NOTE_D4 = 294;   // 低いレ
 const int NOTE_G4 = 392;   // ソ
 const int NOTE_A4 = 440;   // ラ
@@ -276,10 +315,10 @@ unsigned long lastBgmMillis = 0;
 
 void playBGM() {
   unsigned long now = millis();
-  if (now - lastBgmMillis >= BGM_DURATION) {
+  if (now - lastBgmMillis >= bgmDuration) {
     lastBgmMillis = now;
     if (TONES[bgmIndex] > 0) {
-      tone(PIN_BUZZER_PASSIVE, TONES[bgmIndex], BGM_DURATION * 0.8);
+      tone(PIN_BUZZER_PASSIVE, TONES[bgmIndex], bgmDuration * 0.8);
     } else {
       noTone(PIN_BUZZER_PASSIVE);
     }
@@ -288,7 +327,21 @@ void playBGM() {
 }
 
 void levelUp() {
+  if (currentLevel < MAX_SPEED_LEVEL) currentLevel++;
   if (moveInterval > 100) moveInterval -= 40;
+
+  // LCDに"Level UP"を表示
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Level UP!");
+  isLevelUpEffect = true;
+  levelUpEffectStart = millis();
+  levelUpEffectPhase = 1;
+
+  // BGMのテンポを速くする
+  if (bgmDuration > 100) {
+    bgmDuration -= 20; // テンポを少し速く
+  }
 }
 
 // スネークとエサをLEDマトリクスに描画
