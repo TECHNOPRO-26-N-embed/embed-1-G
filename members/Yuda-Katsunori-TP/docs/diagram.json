@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "author": "Yuda-Katsunori-TP",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 20, "left": 10, "attrs": {} },
+    { "type": "wokwi-analog-joystick", "id": "joy1", "top": -170, "left": -260, "attrs": {} },
+    {
+      "type": "wokwi-max7219-matrix",
+      "id": "mtx1",
+      "top": -190,
+      "left": 170,
+      "attrs": { "chain": "1", "color": "red", "layout": "parola" }
+    },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd1",
+      "top": -300,
+      "left": -10,
+      "attrs": { "pins": "i2c", "i2cAddress": "0x27" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzPassive",
+      "top": 210,
+      "left": -230,
+      "attrs": { "mode": "smooth", "volume": "0.8" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzActive",
+      "top": 210,
+      "left": -130,
+      "attrs": { "mode": "accurate", "volume": "0.8" }
+    }
+  ],
+  "connections": [
+    ["uno:5V", "joy1:VCC", "red", ["v0"]],
+    ["uno:GND.1", "joy1:GND", "black", ["v0"]],
+    ["uno:A0", "joy1:HORZ", "green", ["v0"]],
+    ["uno:A1", "joy1:VERT", "green", ["v0"]],
+    ["uno:2", "joy1:SEL", "blue", ["v0"]],
+
+    ["uno:5V", "mtx1:VCC", "red", ["v0"]],
+    ["uno:GND.2", "mtx1:GND", "black", ["v0"]],
+    ["uno:12", "mtx1:DIN", "yellow", ["v0"]],
+    ["uno:10", "mtx1:CS", "orange", ["v0"]],
+    ["uno:11", "mtx1:CLK", "purple", ["v0"]],
+
+    ["uno:5V", "lcd1:VCC", "red", ["v0"]],
+    ["uno:GND.1", "lcd1:GND", "black", ["v0"]],
+    ["uno:A4", "lcd1:SDA", "green", ["v0"]],
+    ["uno:A5", "lcd1:SCL", "green", ["v0"]],
+
+    ["uno:5", "buzzPassive:2", "blue", ["v0"]],
+    ["uno:GND.2", "buzzPassive:1", "black", ["v0"]],
+    ["uno:6", "buzzActive:2", "blue", ["v0"]],
+    ["uno:GND.2", "buzzActive:1", "black", ["v0"]]
+  ],
+  "dependencies": {}
+}
