@@ -9,8 +9,8 @@
 #define PIN_JOY_X A0
 #define PIN_JOY_Y A1
 #define PIN_JOY_BTN 2
-#define PIN_LED_CS 10
-#define PIN_LED_CLK 11
+#define PIN_LED_CS 11
+#define PIN_LED_CLK 10
 #define PIN_LED_DIN 12
 #define PIN_BUZZER_PASSIVE 5
 #define PIN_BUZZER_ACTIVE 6
@@ -108,13 +108,13 @@ void loop() {
       // LCD表示中
       if (now - levelUpEffectStart >= 1000) {
         updateLCD();
-        tone(PIN_BUZZER_PASSIVE, 2000, 300); // 効果音
+        tone(PIN_BUZZER_PASSIVE, 1400, 120); // 効果音（高音と長さを抑えて聴感上の大きさを軽減）
         levelUpEffectStart = now;
         levelUpEffectPhase = 2;
       }
     } else if (levelUpEffectPhase == 2) {
       // 効果音中
-      if (now - levelUpEffectStart >= 300) {
+      if (now - levelUpEffectStart >= 120) {
         isLevelUpEffect = false;
         levelUpEffectPhase = 0;
       }
@@ -127,11 +127,11 @@ void loop() {
     case 0: // 待機
       lc.setRow(0, 0, B11111111); // タイトル表示
       if (now - lastSpeedAdjustMillis > SPEED_ADJUST_DELAY) {
-        if (joyY > 600 && speedLevel < MAX_SPEED_LEVEL) {
+        if (joyY < 400 && speedLevel < MAX_SPEED_LEVEL) {
           speedLevel++;
           lastSpeedAdjustMillis = now;
           tone(PIN_BUZZER_PASSIVE, 1200, 40);
-        } else if (joyY < 400 && speedLevel > MIN_SPEED_LEVEL) {
+        } else if (joyY > 600 && speedLevel > MIN_SPEED_LEVEL) {
           speedLevel--;
           lastSpeedAdjustMillis = now;
           tone(PIN_BUZZER_PASSIVE, 900, 40);
@@ -211,8 +211,8 @@ void readJoystick() {
   if (currentState == 1) {
     if (joyX < 400 && dirX != 1) { dirX = -1; dirY = 0; } // 左
     else if (joyX > 600 && dirX != -1) { dirX = 1; dirY = 0; } // 右
-    else if (joyY > 600 && dirY != 1) { dirX = 0; dirY = -1; } // 上
-    else if (joyY < 400 && dirY != -1) { dirX = 0; dirY = 1; } // 下
+    else if (joyY < 400 && dirY != 1) { dirX = 0; dirY = -1; } // 上（Y軸反転）
+    else if (joyY > 600 && dirY != -1) { dirX = 0; dirY = 1; } // 下（Y軸反転）
   }
 }
 
