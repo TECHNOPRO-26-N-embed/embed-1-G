@@ -93,7 +93,7 @@ bool enemyVisible = true;
 【処理の流れ】
 1. ピンモードを設定する
    - PIN_BUTTON  → INPUT_PULLUP
-   - PIN_LED_*   → OUTPUT
+   - LEDマトリクス制御ピン（DIN, CS, CLK）を OUTPUT に設定
    - PIN_BUZZER  → OUTPUT
 
 2. ライブラリの初期化（使うものだけ）
@@ -147,15 +147,15 @@ bool enemyVisible = true;
       → currentState = 2（プレイ）
 
 ＜currentState が 2（プレイ）のとき＞
-  - 一定時間経過したら movePlayer() を実行（100ms）
-   if (now - lastMoveMillis >= MOVE_INTERVAL)
+  - 一定時間経過したら（if条件を満たしたら） ：
+  
     movePlayer()
-    lastMoveMillis = now
+    lastMoveMillis を更新
 
   - 一定時間経過したら updateEnemy() を実行（300ms）
-  if (now - lastEnemyMillis >= ENEMY_INTERVAL)
+  if 条件を満たしたら：
     updateEnemy()
-    lastEnemyMillis = now
+    lastEnemyMillis を更新
 
   - checkCollision() を実行
       衝突した場合 → currentState = 3（ゲームオーバー）
@@ -205,7 +205,7 @@ bool enemyVisible = true;
 
 ### `readJoystick()` — 方向入力変換
 引数： なし
-戻り値： struct { int dx; int dy; }（移動量）
+戻り値： void（dx, dy はグローバル変数を使用）
 
 ```
 【処理の流れ】
@@ -224,19 +224,16 @@ bool enemyVisible = true;
 ```
 【処理の流れ】
 1. ボタン状態取得
-2. 50ms判定
-3. 押下判定
+2.現在時刻取得
+3. 50ms判定
+4. 押下判定
+5. lastDebounceTime を更新
 ```
 
 ---
 
 ### `movePlayer()` — プレイヤー移動
-引数：
-
-x（int）: プレイヤーX座標
-y（int）: プレイヤーY座標
-dx（int）: X方向移動量
-dy（int）: Y方向移動量
+引数：なし
 
 戻り値： void
 
@@ -249,9 +246,7 @@ dy（int）: Y方向移動量
 ---
 
 ### `updateEnemy()` — 敵移動
-引数：
-enemyX（int&）: 敵X座標
-enemyY（int&）: 敵Y座標
+引数：なし
 
 戻り値： void
 
@@ -264,13 +259,9 @@ enemyY（int&）: 敵Y座標
 ---
 
 ### `checkCollision()` — 衝突判定
-引数：
-playerX（int&）
-playerY（int&）
-enemyX（int）
-enemyY（int）
+引数：なし
 
-戻り値： bool（衝突時 true）
+戻り値： bool
 
 ```
 【処理の流れ】
@@ -280,29 +271,22 @@ enemyY（int）
 ---
 
 ### `drawGame()` — 描画
-引数：
-playerX（int&）
-playerY（int&）
-enemyX（int）
-enemyY（int）
+引数：なし
 
-戻り値： bool（衝突時 true）
+戻り値： void
 
 ```
 【処理の流れ】
 1. 画面クリア
 2. プレイヤー描画
 3. 敵描画（点滅）
+4. LEDマトリクスへ反映
 ```
 
 ---
 
 ### `resetGame()` — 初期化
-引数：
-playerX（int&）
-playerY（int&）
-enemyX（int&）
-enemyY（int&）
+引数：なし
 
 戻り値： void
 
@@ -310,15 +294,15 @@ enemyY（int&）
 【処理の流れ】
 1. プレイヤー中央
 2. 敵再配置
+3. 各タイマーリセット
 ```
 
 ---
 
 ### `handleGameOverInput()` - 待機画面に戻る
 引数：
-buttonPressed（bool）: ボタン押下状態
 
-戻り値： bool（待機画面に戻るなら true）
+戻り値： void
 
 ```
 【処理の流れ】
