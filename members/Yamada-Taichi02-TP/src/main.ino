@@ -5,7 +5,7 @@ LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
 #define PIN_BUTTON     2    // 速度切替ボタン（INPUT_PULLUP）
 #define PIN_MOTOR_1    5    // モーター制御ピン1
 #define PIN_MOTOR_2    6    // モーター制御ピン2
-#define PIN_LED_GREEN  10   // 緑LED
+#define PIN_LED_GREEN  13   // 緑LED
 
 #define JOYSTICK_DEADZONE_HIGH 892
 #define JOYSTICK_DEADZONE_LOW  132
@@ -15,6 +15,8 @@ LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
 #define MOTOR_INTERVAL_MS    50
 #define CHATTERING_DELAY_MS  50
 
+#define SPEED_COUNT 3
+
 // 状態管理
 typedef enum{
   STATE_IDLE,
@@ -23,33 +25,34 @@ typedef enum{
 } State;
 State currentState = STATE_IDLE;
 
-typedef enum{
-  SPEED_HIGH,
-  SPEED_MID,
-  SPEED_LOW,
-  LENGTH
-} Speed;
-Speed speedMode = SPEED_MID;
-
-// グローバル変数
+// タイミング管理
 unsigned long lastMillis_Joystick = 0;
 unsigned long lastMillis_Button = 0;
 unsigned long lastMillis_Motor = 0;
 unsigned long lastChatteringTime = 0;
 
-int joystickInput = 0;  // ジョイスティックの入力値
+// 入力値・状態
+int joystickInput = 0;  
 bool buttonState = false;
 bool prevRawPressed = false;
+
+// 速度モード管理
+int speedMode = 0; // 0: HIGH, 1: MID, 2: LOW
+const int SPEED_PWM_TABLE[SPEED_COUNT] = {255, 170, 100};
+const char* SPEED_LABEL_TABLE[SPEED_COUNT] = {"HIGH", "MID", "LOW"};
 
 // 関数定義
 int readJoystick();
 bool readButton();
 void setSpeedMode();
+void showSpeedLCD();
 void updateOutput();
 void moveForward();
 void moveBackward();
 void stopMotor();
 int getSpeedPwm();
+void blinkErrorLED(unsigned long now);
+void recoverFromError(unsigned long now);
 
 void setup() {
   // ピンモードの設定
@@ -67,8 +70,7 @@ void setup() {
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
   lcd.print("SPEED = ");
-  lcd.setCursor(8, 0);
-  lcd.print("MID");
+  showSpeedLCD();
 
   Serial.begin(9600);
 }
@@ -111,6 +113,8 @@ void loop() {
 
       case STATE_ERROR:
         stopMotor();
+        blinkErrorLED(now);
+        recoverFromError(now);
         break;
     }
 
@@ -125,6 +129,10 @@ int readJoystick(){
 
   if(raw >= 0 && raw <= 1023){
     joystickInput = raw;
+  }
+  else{
+    // 異常値ならエラー遷移
+    currentState = STATE_ERROR;
   }
 
   return joystickInput;
@@ -152,43 +160,35 @@ bool readButton(){
   return false;
 }
 
-// 速度モードを設定・表示する
+// 速度モードを設定・LCD表示
 void setSpeedMode() {
+  speedMode = (speedMode + 1) % SPEED_COUNT;
+  showSpeedLCD();
+}
+
+// 現在の速度モードをLCDに表示
+void showSpeedLCD() {
+  lcd.setCursor(8, 0);
+  lcd.print("    ");
   lcd.setCursor(8, 0);
 
-  // 次のモードに遷移させる
-  switch (speedMode) {
-    case SPEED_HIGH:
-      speedMode = SPEED_MID;
-      lcd.print("MID ");
-      break;
-    case SPEED_MID:
-      speedMode = SPEED_LOW;
-        lcd.print("LOW ");
-      break;
-    case SPEED_LOW:
-      speedMode = SPEED_HIGH;
-      lcd.print("HIGH");
-      break;
-  }
+  lcd.print(SPEED_LABEL_TABLE[speedMode]);
 }
 
 // モードごとの速度を取得する
 int getSpeedPwm(){
-  switch (speedMode) {
-    case SPEED_HIGH:
-      return 255;
-    case SPEED_MID:
-      return 170;
-    case SPEED_LOW:
-      return 100;
-  }
-
-  return 0;
+  return SPEED_PWM_TABLE[speedMode];
 }
 
 // スティック入力値をもとに分岐させる
 void updateOutput(){
+
+  // ジョイスティック値が異常ならエラー遷移
+  if (joystickInput < 0 || joystickInput > 1023) {
+    currentState = STATE_ERROR;
+    return;
+  }
+
   if(joystickInput < JOYSTICK_DEADZONE_LOW){
     moveForward();
   }
@@ -196,8 +196,34 @@ void updateOutput(){
     moveBackward();
   }
   else{
-    stopMotor();
     currentState = STATE_IDLE;
+  }
+}
+
+// エラー表示用のLED点滅処理
+void blinkErrorLED(unsigned long now) {
+  static bool ledState = false;
+  static unsigned long lastBlink = 0;
+  if (now - lastBlink > 300) {
+    ledState = !ledState;
+    digitalWrite(PIN_LED_GREEN, ledState ? HIGH : LOW);
+    lastBlink = now;
+  }
+}
+
+// エラー回復処理
+void recoverFromError(unsigned long now) {
+  static unsigned long errorButtonStart = 0;
+  if (digitalRead(PIN_BUTTON) == LOW) {
+    if (errorButtonStart == 0) errorButtonStart = now;
+    if (now - errorButtonStart > 1000) {
+      // 回復処理
+      currentState = STATE_IDLE;
+      digitalWrite(PIN_LED_GREEN, LOW);
+      errorButtonStart = 0;
+    }
+  } else {
+    errorButtonStart = 0;
   }
 }
 
