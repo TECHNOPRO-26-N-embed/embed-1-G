@@ -35,9 +35,9 @@
 【ピン定義】（basic_design.md 3-1 から転記）
 PIN_JOYSTICK_X = A0;    // ジョイスティックX軸
 PIN_BUTTON     = 2;     // 速度切替ボタン（INPUT_PULLUP）
-PIN_MOTOR_1    = 3;     // モーター制御ピン1（L293D 3）
+PIN_MOTOR_1    = 5;     // モーター制御ピン1（L293D 5）
 PIN_MOTOR_2    = 6;     // モーター制御ピン2（L293D 6）
-PIN_LED_GREEN  = 10;    // 緑LED
+PIN_LED_GREEN  = 13;    // 緑LED
 
 【状態管理】（basic_design.md 1-2 の状態名から転記）
 enum State {
@@ -98,7 +98,7 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
   - now - lastMillis_Button >= 50 のとき readButton() を実行し、押下確定時は setSpeedMode() を実行する
 
 ＜currentState が Idle（待機中）のとき＞
-  - joystickInput を監視する（デッドゾーン: 512 ± 80）
+  - joystickInput を監視する（デッドゾーン: LOW=132 / HIGH=892）
   - joystickInput がデッドゾーン外なら → currentState = Move
 
 
@@ -149,9 +149,9 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 
 ```
 【処理の流れ】
-1. joystickInput を評価する（デッドゾーン: 512 ± 80）
-2. joystickInput > 592 なら moveForward()、joystickInput < 432 なら moveBackward() を実行する
-3. 432 <= joystickInput <= 592 なら、状態を待機にする
+1. joystickInput を評価する（デッドゾーン: LOW=132 / HIGH=892）
+2. joystickInput < 132 なら moveForward()、joystickInput > 892 なら moveBackward() を実行する
+3. 132 <= joystickInput <= 892 なら、状態を待機にする
 
 【エラー・異常ケース】
 - joystickInput が 0〜1023 の範囲外の場合: モーター停止して ERROR に遷移する
@@ -219,9 +219,9 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 
 ---
 
-### `showPowerLED()` — 電源状態に応じてLED点灯
+### `blinkErrorLED()` — エラー状態をLED点滅で表示
 
-**basic_design.md 2-2 との対応：** A01 電源状態をLED表示
+**basic_design.md 4 との対応：** 異常系・エラー処理
 
 **引数：** `なし`
 
@@ -229,12 +229,32 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 
 ```
 【処理の流れ】
-1. 通常時は PIN_LED_GREEN を点灯する
-2. エラー時は点滅表示へ切り替える
-3. 状態変化がなければ表示を維持する
+1. ERROR状態で一定周期ごとに PIN_LED_GREEN を反転する
+2. 点滅状態を維持してエラー発生を通知する
+3. ERROR以外に遷移したら通常表示に戻す
 
 【エラー・異常ケース】
-- LED制御に異常がある場合: ログ出力し、安全側（停止）を優先する
+- 点滅周期が崩れた場合: タイマー値を再初期化して復帰する
+```
+
+---
+
+### `recoverFromError()` — エラー状態からの回復処理
+
+**basic_design.md 4 との対応：** 異常系・エラー処理
+
+**引数：** `なし`
+
+**戻り値：** `void`
+
+```
+【処理の流れ】
+1. ボタンの押下継続時間を計測する
+2. 1秒以上の長押しを検出したら currentState を Idle に戻す
+3. 復帰時にLEDを消灯して通常状態へ戻す
+
+【エラー・異常ケース】
+- 短押しやチャタリングでは復帰させない
 ```
 
 ---
@@ -326,9 +346,9 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 3. 急な反転を避けるため、前転→後転（または後転→前転）時は一度停止を挟む。
 
 【入力値と出力値の関係】
-- 0〜431: 後転（moveBackward）
-- 432〜592: 停止（モーター停止）
-- 593〜1023: 前転（moveForward）
+- 0〜131: 前転（moveForward）
+- 132〜892: 停止（モーター停止）
+- 893〜1023: 後転（moveBackward）
 
 ```
 
@@ -360,21 +380,21 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 |:---|:---|:---|:---|:---|:---|
 | 1 | readButton() | ボタンを1回押す | true が返る | | [ ] |
 | 2 | readButton() | ボタンを素早く2回押す | 1回分だけ true になる | | [ ] |
-| 3 | readJoystick() | joystickInput = 431 相当になるように倒す | 後転側として判定される値が取得される | | [ ] |
-| 4 | readJoystick() | joystickInput = 432 相当になるように倒す | 停止側として判定される値が取得される | | [ ] |
-| 5 | readJoystick() | joystickInput = 592 相当になるように倒す | 停止側として判定される値が取得される | | [ ] |
-| 6 | readJoystick() | joystickInput = 593 相当になるように倒す | 前転側として判定される値が取得される | | [ ] |
+| 3 | readJoystick() | joystickInput = 131 相当になるように倒す | 前転側として判定される値が取得される | | [ ] |
+| 4 | readJoystick() | joystickInput = 132 相当になるように倒す | 停止側として判定される値が取得される | | [ ] |
+| 5 | readJoystick() | joystickInput = 892 相当になるように倒す | 停止側として判定される値が取得される | | [ ] |
+| 6 | readJoystick() | joystickInput = 893 相当になるように倒す | 後転側として判定される値が取得される | | [ ] |
 | 7 | readJoystick() | 端点（最小/最大）入力を与える | 0〜1023 の範囲で値が取得される | | [ ] |
 
 ### 5-2. 出力系テスト
 
 | No | テスト対象の関数 | 入力・操作 | 期待する結果 | 実際の結果 | 合否 |
 |:---|:---|:---|:---|:---|:---|
-| 1 | updateOutput() | joystickInput = 700 に設定して実行 | モーターが前転する | | [ ] |
-| 2 | updateOutput() | joystickInput = 300 に設定して実行 | モーターが後転する | | [ ] |
+| 1 | updateOutput() | joystickInput = 100 に設定して実行 | モーターが前転する | | [ ] |
+| 2 | updateOutput() | joystickInput = 950 に設定して実行 | モーターが後転する | | [ ] |
 | 3 | updateOutput() | joystickInput = 512 に設定して実行 | モーターが停止する | | [ ] |
-| 4 | updateOutput() | joystickInput = 431 → 432 に連続変更して実行 | 後転から停止へ切り替わる | | [ ] |
-| 5 | updateOutput() | joystickInput = 592 → 593 に連続変更して実行 | 停止から前転へ切り替わる | | [ ] |
+| 4 | updateOutput() | joystickInput = 131 → 132 に連続変更して実行 | 前転から停止へ切り替わる | | [ ] |
+| 5 | updateOutput() | joystickInput = 892 → 893 に連続変更して実行 | 停止から後転へ切り替わる | | [ ] |
 | 6 | updateOutput() | joystickInput を範囲外値として扱う異常入力を与える | モーター停止し、STATE_ERROR へ遷移する | | [ ] |
 
 ### 5-3. タイミング・並行動作テスト
@@ -413,13 +433,13 @@ CHATTERING_DELAY   : int = 50;      // チャタリング判定時間（ms）
 > 「Section 5 の単体テスト仕様書で、各関数の動作が正しく検証できていますか？テストが不足している項目や、境界値テストが必要な箇所を教えてください。」
 
 **AIの回答（要約）：**
-- しきい値 431/432/592/593 の境界値テストが不足している。  
+- しきい値 131/132/892/893 の境界値テストが不足している。  
 - 異常系（範囲外入力時の STATE_ERROR 遷移）の確認が不足している。  
 - 50ms周期の判定基準に許容誤差がなく、評価が曖昧である。  
 - 並行動作時（入力監視とボタン監視同時）の干渉確認が不足している。
 
 **対応した内容：**
-- Section 5-1 に境界値テスト（431/432/592/593）を追加。  
+- Section 5-1 に境界値テスト（131/132/892/893）を追加。  
 - Section 5-2 に範囲外入力の異常系テストを追加。  
 - Section 5-3 の期待結果を 50ms±10ms に具体化。  
 - Section 5-3 に並行動作の干渉確認テストを追加。
