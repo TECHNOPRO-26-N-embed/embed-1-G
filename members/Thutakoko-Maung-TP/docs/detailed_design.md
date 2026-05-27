@@ -76,6 +76,23 @@
 
 ```
 【処理の流れ】
+1. ピンモードを設定する
+   - PIN_BUTTON  → INPUT_PULLUP
+   - PIN_LED_*   → OUTPUT
+   - PIN_BUZZER  → OUTPUT
+
+2. ライブラリの初期化（使うものだけ）
+   - 例: lcd.begin(16, 2)
+   - 例: servo.attach(PIN_SERVO)
+
+3. Serial.begin(9600)（デバッグ用）
+
+4. 起動確認（任意）: 緑LEDを1秒点灯して消灯
+```
+
+**↓ 自分の setup() を設計してください**
+```
+【処理の流れ】
 1. サーボを初期化する
    - myServo.attach(PIN_SERVO)
 
@@ -95,14 +112,6 @@
    - Serial.println("System Started...")
 ```
 
-**↓ 自分の setup() を設計してください**
-```
-【処理の流れ】
-1. サーボ初期化（attach）
-2. 各ピンモード設定（SW=INPUT_PULLUP, LED/BUZZER/TRIG=OUTPUT, ECHO=INPUT）
-3. シリアル初期化・サーボ90°設定・起動ログ出力
-```
-
 ---
 
 ### `loop()` — メインループ
@@ -112,6 +121,30 @@
 ```
 【処理の流れ】
 
+＜毎ループ実行すること＞
+  - 入力を読む（readButton(), readSensor() などを呼ぶ）
+  - 現在時刻を取得: now = millis()
+
+＜currentState が 0（待機中）のとき＞
+  - センサー値を監視する
+  - 検知条件を満たしたら → currentState = 1
+
+＜currentState が 1（動作中）のとき＞
+  - メイン処理を行う
+  - 終了条件を満たしたら → currentState = 2
+
+＜currentState が 2（完了）のとき＞
+  - 完了表示をする
+  - リセットボタンが押されたら → currentState = 0
+
+＜currentState が 3（エラー）のとき＞
+  - エラー表示をする / リセットを待つ
+
+```
+
+**↓ 自分の loop() を設計してください**
+```
+【処理の流れ】
 ＜毎ループ実行すること＞
   - handleJoystick() を呼び、X軸入力に応じて角度を更新
   - handleResetButton() を呼び、押し込みボタンで90°リセットを処理
@@ -129,10 +162,8 @@
   - 警告状態から復帰した瞬間だけ「safe」ログを出力
 ```
 
-**↓ 自分の loop() を設計してください**
 ```
-【処理の流れ】
-
+  【処理の流れ】
 ＜毎ループ実行すること＞
   handleJoystick();
   handleResetButton();
