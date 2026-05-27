@@ -1,7 +1,6 @@
 #include <Servo.h>
 
 Servo myServo;
-
 // -----------------------------
 // PIN DEFINITIONS
 // -----------------------------
@@ -12,7 +11,6 @@ const int ledPin = 6;      // Alert LED
 const int buzzerPin = 8;   // Buzzer
 const int trigPin = 9;     // Ultrasonic trigger
 const int echoPin = 10;    // Ultrasonic echo
-
 // -----------------------------
 // VARIABLES
 // -----------------------------
@@ -20,7 +18,6 @@ long duration;
 int distance;
 int servoAngle = 90;
 bool alertState = false;
-
 // -----------------------------
 // TIMING
 // -----------------------------
@@ -30,7 +27,6 @@ unsigned long servoInterval = 10;
 unsigned long lastAlertBlink = 0;
 unsigned long alertInterval = 200;
 bool buzzerState = false;
-
 // -----------------------------
 // BUTTON DEBOUNCE
 // -----------------------------
@@ -64,7 +60,6 @@ void loop() {
     distance = readUltrasonic();
     handleAlert(distance);
 }
-
 // =====================================================
 // JOYSTICK SERVO CONTROL
 // =====================================================
@@ -100,7 +95,6 @@ void handleJoystick() {
         lastServoMove = now;
     }
 }
-
 // =====================================================
 // BUTTON RESET (with debounce)
 // =====================================================
@@ -127,7 +121,6 @@ void handleResetButton() {
 
     lastButtonState = reading;
 }
-
 // =====================================================
 // ULTRASONIC SENSOR READING
 // =====================================================
@@ -147,7 +140,6 @@ int readUltrasonic() {
 
     return duration * 0.034 / 2;
 }
-
 // =====================================================
 // ALERT SYSTEM (LED + BUZZER + DISTANCE PRINT)
 // =====================================================
